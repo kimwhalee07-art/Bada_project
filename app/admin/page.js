@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authRole, setAuthRole] = useState(null); // null | 'admin' | 'worker'
   const [activeTab, setActiveTab] = useState('plans'); // 'plans' | 'stores' | 'orders'
   const [loginForm, setLoginForm] = useState({ id: '', pw: '' });
 
@@ -34,20 +34,25 @@ export default function AdminPage() {
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [editingStore, setEditingStore] = useState(null);
 
-  // 로그인 처리
+  // 로그인 인증 로직 (힌트 미노출)
   const handleLogin = (e) => {
     e.preventDefault();
     if (loginForm.id === 'admin' && loginForm.pw === '1234') {
-      setIsAuthenticated(true);
+      setAuthRole('admin');
+      setLoginForm({ id: '', pw: '' });
+    } else if (loginForm.id === 'worker' && loginForm.pw === '1234') {
+      setAuthRole('worker');
       setLoginForm({ id: '', pw: '' });
     } else {
-      alert('관리자 인증 정보가 올바르지 않습니다.');
+      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
     }
   };
 
   // 요금제 핸들러
   const handleSavePlan = (e) => {
     e.preventDefault();
+    if (authRole !== 'admin') return alert('총괄 관리자만 요금제를 등록/수정할 수 있습니다.');
+
     if (editingPlan.id) {
       setPlans(plans.map(p => p.id === editingPlan.id ? editingPlan : p));
       alert('요금제가 수정되었습니다.');
@@ -59,6 +64,7 @@ export default function AdminPage() {
   };
 
   const handleDeletePlan = (id) => {
+    if (authRole !== 'admin') return alert('총괄 관리자만 요금제를 삭제할 수 있습니다.');
     if (confirm('이 요금제를 삭제하시겠습니까?')) {
       setPlans(plans.filter(p => p.id !== id));
     }
@@ -67,6 +73,8 @@ export default function AdminPage() {
   // 대리점 핸들러
   const handleSaveStore = (e) => {
     e.preventDefault();
+    if (authRole !== 'admin') return alert('총괄 관리자만 매장 정보를 등록/수정할 수 있습니다.');
+
     if (editingStore.isEditing) {
       setStores(stores.map(s => s.id === editingStore.id ? editingStore : s));
       alert('매장 정보가 수정되었습니다.');
@@ -78,25 +86,26 @@ export default function AdminPage() {
   };
 
   const handleDeleteStore = (id) => {
+    if (authRole !== 'admin') return alert('총괄 관리자만 매장을 삭제할 수 있습니다.');
     if (confirm('이 매장을 삭제하시겠습니까?')) {
       setStores(stores.filter(s => s.id !== id));
     }
   };
 
-  // 비로그인 상태일 때 전용 로그인 화면
-  if (!isAuthenticated) {
+  // 비로그인 상태: 로그인 화면 (ID/PW 힌트 미표시)
+  if (!authRole) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', fontFamily: 'sans-serif' }}>
         <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '36px', width: '100%', maxWidth: '380px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }}>
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '10px', backgroundColor: '#0284c7', color: '#fff', fontSize: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>B</div>
-            <h2 style={{ margin: '0 0 6px 0', fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>BADA 총괄 관리자 포털</h2>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>인가된 직원 전용 시스템입니다.</p>
+            <h2 style={{ margin: '0 0 6px 0', fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>BADA 내부 관리 시스템</h2>
+            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>인가된 관리자 및 직원 전용 포털입니다.</p>
           </div>
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <input 
               type="text" 
-              placeholder="관리자 아이디 (admin)" 
+              placeholder="아이디" 
               value={loginForm.id} 
               onChange={(e) => setLoginForm({ ...loginForm, id: e.target.value })} 
               style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }} 
@@ -104,7 +113,7 @@ export default function AdminPage() {
             />
             <input 
               type="password" 
-              placeholder="비밀번호 (1234)" 
+              placeholder="비밀번호" 
               value={loginForm.pw} 
               onChange={(e) => setLoginForm({ ...loginForm, pw: e.target.value })} 
               style={{ padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }} 
@@ -122,36 +131,38 @@ export default function AdminPage() {
     );
   }
 
-  // 관리자 인증 완료 후 대시보드 화면
+  // 관리자/직원 로그인 완료 후 대시보드 화면
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: 'sans-serif' }}>
-      {/* 관리자 헤더 */}
+      {/* 헤더 */}
       <header style={{ backgroundColor: '#0f172a', color: '#fff', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ backgroundColor: '#0284c7', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '14px' }}>BADA</span>
           <span style={{ fontSize: '16px', fontWeight: 'bold' }}>운영 관리 시스템</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <span style={{ fontSize: '13px', color: '#94a3b8' }}>총괄 관리자 모드</span>
-          <button onClick={() => setIsAuthenticated(false)} style={{ backgroundColor: '#334155', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+          <span style={{ fontSize: '13px', color: authRole === 'admin' ? '#38bdf8' : '#34d399', fontWeight: 'bold' }}>
+            {authRole === 'admin' ? '🛡️ 총괄 관리자' : '💼 일반 직원'} 접속 중
+          </span>
+          <button onClick={() => setAuthRole(null)} style={{ backgroundColor: '#334155', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
             로그아웃
           </button>
-          <a href="/" target="_blank" style={{ fontSize: '12px', color: '#38bdf8', textDecoration: 'none' }}>메인 사이트 보기 ↗</a>
+          <a href="/" target="_blank" style={{ fontSize: '12px', color: '#94a3b8', textDecoration: 'none' }}>메인 사이트 ↗</a>
         </div>
       </header>
 
       {/* 대시보드 본문 */}
       <main style={{ maxWidth: '1100px', margin: '30px auto', padding: '0 20px' }}>
-        {/* 네비게이션 탭 */}
+        {/* 상단 탭 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
           <button onClick={() => setActiveTab('plans')} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'plans' ? '#0284c7' : '#ffffff', color: activeTab === 'plans' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
-            📶 유심 요금제 관리 ({plans.length})
+            📶 유심 요금제 ({plans.length})
           </button>
           <button onClick={() => setActiveTab('stores')} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'stores' ? '#0284c7' : '#ffffff', color: activeTab === 'stores' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
-            🏬 대리점/매장 관리 ({stores.length})
+            🏬 대리점/매장 ({stores.length})
           </button>
           <button onClick={() => setActiveTab('orders')} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'orders' ? '#0284c7' : '#ffffff', color: activeTab === 'orders' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
-            📋 인입 주문/상담 접수 ({orders.length})
+            📋 주문/상담 접수 ({orders.length})
           </button>
         </div>
 
@@ -159,13 +170,18 @@ export default function AdminPage() {
         {activeTab === 'plans' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록된 요금제 목록</h2>
-              <button 
-                onClick={() => { setEditingPlan({ id: null, name: '', sub: '', price: '', unit: '/월', isBest: false, icon: '📶', desc: '' }); setShowPlanModal(true); }} 
-                style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-              >
-                ➕ 새 요금제 등록
-              </button>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록된 요금제 목록</h2>
+                {authRole === 'worker' && <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>※ 직원 모드는 조회만 가능합니다 (수정 권한: 관리자 전용)</p>}
+              </div>
+              {authRole === 'admin' && (
+                <button 
+                  onClick={() => { setEditingPlan({ id: null, name: '', sub: '', price: '', unit: '/월', isBest: false, icon: '📶', desc: '' }); setShowPlanModal(true); }} 
+                  style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  ➕ 새 요금제 등록
+                </button>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
               {plans.map((p) => (
@@ -180,10 +196,12 @@ export default function AdminPage() {
                   <div style={{ flex: 1, fontSize: '12px', color: '#475569', borderTop: '1px solid #f1f5f9', paddingTop: '10px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
                     {p.desc}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px' }}>
-                    <button onClick={() => { setEditingPlan({ ...p }); setShowPlanModal(true); }} style={{ padding: '8px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
-                    <button onClick={() => handleDeletePlan(p.id)} style={{ padding: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>삭제</button>
-                  </div>
+                  {authRole === 'admin' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px' }}>
+                      <button onClick={() => { setEditingPlan({ ...p }); setShowPlanModal(true); }} style={{ padding: '8px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
+                      <button onClick={() => handleDeletePlan(p.id)} style={{ padding: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>삭제</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -194,13 +212,18 @@ export default function AdminPage() {
         {activeTab === 'stores' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록된 픽업 매장/대리점</h2>
-              <button 
-                onClick={() => { setEditingStore({ id: `store_${Date.now()}`, name: '', address: '', phone: '' }); setShowStoreModal(true); }} 
-                style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-              >
-                ➕ 새 대리점 등록
-              </button>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록된 픽업 매장/대리점</h2>
+                {authRole === 'worker' && <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>※ 직원 모드는 조회만 가능합니다 (수정 권한: 관리자 전용)</p>}
+              </div>
+              {authRole === 'admin' && (
+                <button 
+                  onClick={() => { setEditingStore({ id: `store_${Date.now()}`, name: '', address: '', phone: '' }); setShowStoreModal(true); }} 
+                  style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  ➕ 새 대리점 등록
+                </button>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
               {stores.map((s) => (
@@ -208,17 +231,19 @@ export default function AdminPage() {
                   <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0284c7' }}>{s.name}</div>
                   <div style={{ fontSize: '13px', color: '#475569', marginTop: '6px' }}>📍 {s.address}</div>
                   <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📞 {s.phone}</div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
-                    <button onClick={() => { setEditingStore({ ...s, isEditing: true }); setShowStoreModal(true); }} style={{ flex: 1, padding: '7px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
-                    <button onClick={() => handleDeleteStore(s.id)} style={{ flex: 1, padding: '7px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>삭제</button>
-                  </div>
+                  {authRole === 'admin' && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
+                      <button onClick={() => { setEditingStore({ ...s, isEditing: true }); setShowStoreModal(true); }} style={{ flex: 1, padding: '7px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
+                      <button onClick={() => handleDeleteStore(s.id)} style={{ flex: 1, padding: '7px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>삭제</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* 탭 3: 주문 접수 현황 */}
+        {/* 탭 3: 주문 접수 현황 (관리자/직원 공통 확인 가능) */}
         {activeTab === 'orders' && (
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>실시간 접수 상담/주문 내역</h2>
@@ -254,7 +279,7 @@ export default function AdminPage() {
         )}
       </main>
 
-      {/* 요금제 모달 */}
+      {/* 요금제 모달 (관리자 전용) */}
       {showPlanModal && editingPlan && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 100 }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px' }}>
@@ -280,7 +305,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* 대리점 모달 */}
+      {/* 대리점 모달 (관리자 전용) */}
       {showStoreModal && editingStore && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 100 }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '400px' }}>
