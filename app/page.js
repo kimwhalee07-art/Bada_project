@@ -1,7 +1,6 @@
 'use client';
 import React, { useState } from 'react';
 
-// 4개 국어 기본 정적 텍스트 딕셔너리
 const translations = {
   ko: {
     nav: { plans: '유심 요금제', internet: '🌐 인터넷 설치 (사은품)', hanpass: '💸 해외송금 (한패스)', stores: '수령매장', faq: 'FAQ', login: '로그인', apply: '신청하기', logout: '로그아웃' },
@@ -253,37 +252,28 @@ export default function BadaPage() {
   const [lang, setLang] = useState('ko');
   const t = translations[lang] || translations.ko;
 
-  // 모달 제어 상태
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showInternetModal, setShowInternetModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [selectedPlanForModal, setSelectedPlanForModal] = useState('데이터 무제한 30일');
 
-  // 관리자 전용 편집 모달 상태
-  const [showPlanEditModal, setShowPlanEditModal] = useState(false);
-  const [editingPlan, setEditingPlan] = useState(null);
-  const [showStoreEditModal, setShowStoreEditModal] = useState(false);
-  const [editingStore, setEditingStore] = useState(null);
-
   const [openFaq, setOpenFaq] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const [loginTab, setLoginTab] = useState('social');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginForm, setLoginForm] = useState({ id: '', pw: '' });
+  // 순수 고객 전용 인증 상태
   const [userAuth, setUserAuth] = useState({ role: 'guest', name: '손님', provider: null });
 
-  // 1. 요금제 동적 상태 (추가/수정/삭제 가능)
-  const [plans, setPlans] = useState([
-    { id: 1, name: '데이터 무제한 30일', sub: '데이터와 통화를 마음껏', price: '39,600', unit: '/월', isBest: true, icon: '📶', desc: '무제한 데이터 (11GB + 일2GB 후 3Mbps)\n통화/문자 무제한\n여권/외국인등록증 모두 개통 가능\n30일 자동 연장 가능' },
-    { id: 2, name: '실속형 선불폰', sub: '종량 충전형', price: '15,000', unit: '/부터', isBest: false, icon: '📱', desc: '필요한 만큼만 충전\n여권 개통 가능\n기본 요금 15,000원부터\n충전 금액만큼 사용' },
-    { id: 3, name: '유학생 PASS팩', sub: '본인인증 완벽 지원', price: '29,700', unit: '/월', isBest: false, icon: '🎓', desc: '외국인등록증(ARC) 필수\n은행 계좌 개설 지원\n토스/배달앱 본인인증\n유학생 특화 요금 할인' },
-    { id: 4, name: '단기 eSIM', sub: '여행/단기 출장 전용', price: '18,000', unit: '/5일', isBest: false, icon: '✈️', desc: '5일간 데이터 무제한\nQR코드로 이메일/메신저 전송\n물리 유심 교체 불필요\n신청 즉시 개통' }
+  // 요금제 기본 데이터
+  const [plans] = useState([
+    { id: 1, name: '데이터 무제한 30일', sub: '데이터와 통화를 마음껏', price: '39,600', unit: '/월', isBest: true, icon: '📶', desc: ['무제한 데이터 (11GB + 일2GB 후 3Mbps)', '통화/문자 무제한', '여권/외국인등록증 모두 개통 가능', '30일 자동 연장 가능'] },
+    { id: 2, name: '실속형 선불폰', sub: '종량 충전형', price: '15,000', unit: '/부터', isBest: false, icon: '📱', desc: ['필요한 만큼만 충전', '여권 개통 가능', '기본 요금 15,000원부터', '충전 금액만큼 사용'] },
+    { id: 3, name: '유학생 PASS팩', sub: '본인인증 완벽 지원', price: '29,700', unit: '/월', isBest: false, icon: '🎓', desc: ['외국인등록증(ARC) 필수', '은행 계좌 개설 지원', '토스/배달앱 본인인증', '유학생 특화 요금 할인'] },
+    { id: 4, name: '단기 eSIM', sub: '여행/단기 출장 전용', price: '18,000', unit: '/5일', isBest: false, icon: '✈️', desc: ['5일간 데이터 무제한', 'QR코드로 이메일/메신저 전송', '물리 유심 교체 불필요', '신청 즉시 개통'] }
   ]);
 
-  // 2. 대리점/수령매장 동적 상태 (추가/수정/삭제 가능)
-  const [stores, setStores] = useState([
+  // 대리점 데이터
+  const [stores] = useState([
     { id: 'cheonan', name: '바다 천안 본점', address: '충남 천안시 동남구 대흥로 (천안역 도보 3분)', phone: '041-555-1234' },
     { id: 'ansan', name: '바다 안산 다문화거리점', address: '경기 안산시 단원구 원곡동', phone: '031-444-5678' },
     { id: 'suwon', name: '바다 수원역점', address: '경기 수원시 팔달구 매산로', phone: '031-222-9876' }
@@ -298,11 +288,6 @@ export default function BadaPage() {
     name: '', phone: '', carrier: 'KT', speed: '500M', address: ''
   });
 
-  const [orders, setOrders] = useState([
-    { id: 1, type: 'SIM', name: 'NGUYEN VAN A', phone: '010-9988-7766', detail: '데이터 무제한 30일 (천안 본점 픽업)', time: '10분 전' },
-    { id: 2, type: 'INTERNET', name: 'ZHANG WEI', phone: '010-3322-1144', detail: 'KT 500M 인터넷+TV 상담 신청', time: '25분 전' }
-  ]);
-
   const [chatMessages, setChatMessages] = useState([
     { role: 'assistant', content: '안녕하세요! 바다(BADA) 공식 AI 매니저입니다.\n외국인 선불유심, 인터넷 설치(백메가 제휴), 한패스 해외송금 등 무엇이든 편하게 물어보세요!' }
   ]);
@@ -315,6 +300,7 @@ export default function BadaPage() {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  // 고객 소셜 로그인
   const handleSocialLogin = (platform, displayName) => {
     setUserAuth({ role: 'customer', name: displayName, provider: platform });
     setForm(prev => ({ ...prev, name: displayName }));
@@ -323,106 +309,9 @@ export default function BadaPage() {
     alert(`${platform} 로그인 완료: ${displayName}`);
   };
 
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (loginForm.id === 'admin' && loginForm.pw === '1234') {
-      setUserAuth({ role: 'admin', name: '총괄 관리자', provider: 'Internal' });
-      setShowLoginModal(false);
-      setLoginForm({ id: '', pw: '' });
-      alert('총괄 관리자 모드로 접속했습니다. 요금제 및 매장 관리 권한이 활성화되었습니다.');
-    } else if (loginForm.id === 'cheonan' && loginForm.pw === '1234') {
-      setUserAuth({ role: 'staff', name: '바다 천안 본점', provider: 'Internal' });
-      setShowLoginModal(false);
-      setLoginForm({ id: '', pw: '' });
-      alert('천안 본점 모드로 접속했습니다.');
-    } else {
-      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
-    }
-  };
-
-  // ------------------- 관리자 요금제 관리 로직 -------------------
-  const handleOpenAddPlan = () => {
-    setEditingPlan({ id: null, name: '', sub: '', price: '', unit: '/월', isBest: false, icon: '📶', desc: '' });
-    setShowPlanEditModal(true);
-  };
-
-  const handleOpenEditPlan = (plan) => {
-    setEditingPlan({ ...plan });
-    setShowPlanEditModal(true);
-  };
-
-  const handleSavePlan = (e) => {
-    e.preventDefault();
-    if (!editingPlan.name || !editingPlan.price) return alert('요금제명과 가격을 입력해주세요.');
-
-    if (editingPlan.id) {
-      // 수정
-      setPlans(plans.map(p => p.id === editingPlan.id ? editingPlan : p));
-      alert('요금제가 성공적으로 수정되었습니다.');
-    } else {
-      // 신규 추가
-      const newPlan = { ...editingPlan, id: Date.now() };
-      setPlans([...plans, newPlan]);
-      alert('새 요금제가 추가되었습니다.');
-    }
-    setShowPlanEditModal(false);
-    setEditingPlan(null);
-  };
-
-  const handleDeletePlan = (id) => {
-    if (confirm('이 요금제를 삭제하시겠습니까?')) {
-      setPlans(plans.filter(p => p.id !== id));
-    }
-  };
-
-  // ------------------- 관리자 대리점 관리 로직 -------------------
-  const handleOpenAddStore = () => {
-    setEditingStore({ id: `store_${Date.now()}`, name: '', address: '', phone: '' });
-    setShowStoreEditModal(true);
-  };
-
-  const handleOpenEditStore = (store) => {
-    setEditingStore({ ...store, isEditing: true });
-    setShowStoreEditModal(true);
-  };
-
-  const handleSaveStore = (e) => {
-    e.preventDefault();
-    if (!editingStore.name || !editingStore.address) return alert('매장명과 주소를 입력해주세요.');
-
-    if (editingStore.isEditing) {
-      // 수정
-      setStores(stores.map(s => s.id === editingStore.id ? editingStore : s));
-      alert('매장 정보가 수정되었습니다.');
-    } else {
-      // 신규 추가
-      setStores([...stores, editingStore]);
-      alert('새 대리점이 등록되었습니다.');
-    }
-    setShowStoreEditModal(false);
-    setEditingStore(null);
-  };
-
-  const handleDeleteStore = (id) => {
-    if (confirm('이 매장/대리점을 삭제하시겠습니까?')) {
-      setStores(stores.filter(s => s.id !== id));
-    }
-  };
-
-  // ------------------- 일반 신청 핸들러 -------------------
   const handleApplySubmit = (e) => {
     e.preventDefault();
     if (!form.name || !form.phone) return alert('성함과 연락처를 입력해주세요.');
-    const storeInfo = stores.find(s => s.id === form.pickupStore);
-    const newOrder = {
-      id: Date.now(),
-      type: 'SIM',
-      name: form.name,
-      phone: form.phone,
-      detail: `${form.plan} (${form.deliveryMethod === 'store' ? storeInfo?.name : form.deliveryMethod === 'delivery' ? '택배' : 'eSIM'})`,
-      time: '방금 전'
-    };
-    setOrders([newOrder, ...orders]);
     alert('신청이 정상 접수되었습니다! 담당 직원이 곧 연락드립니다.');
     setShowApplyModal(false);
   };
@@ -430,15 +319,6 @@ export default function BadaPage() {
   const handleInternetSubmit = (e) => {
     e.preventDefault();
     if (!internetForm.name || !internetForm.phone) return alert('성함과 연락처를 입력해주세요.');
-    const newOrder = {
-      id: Date.now(),
-      type: 'INTERNET',
-      name: internetForm.name,
-      phone: internetForm.phone,
-      detail: `[인터넷] ${internetForm.carrier} ${internetForm.speed} (${internetForm.address})`,
-      time: '방금 전'
-    };
-    setOrders([newOrder, ...orders]);
     alert('인터넷 설치 상담이 접수되었습니다! 최대 사은품 안내를 위해 곧 전화드립니다.');
     setShowInternetModal(false);
     setInternetForm({ name: '', phone: '', carrier: 'KT', speed: '500M', address: '' });
@@ -494,14 +374,14 @@ export default function BadaPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {userAuth.role === 'guest' ? (
               <button 
-                onClick={() => { setShowLoginModal(true); setLoginTab('social'); }} 
+                onClick={() => setShowLoginModal(true)} 
                 style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}
               >
                 <span>👤</span> {t.nav.login}
               </button>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: userAuth.role === 'admin' ? '#0284c7' : '#16a34a', backgroundColor: userAuth.role === 'admin' ? '#e0f2fe' : '#dcfce7', padding: '4px 10px', borderRadius: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '6px' }}>
                   {userAuth.name}
                 </span>
                 <button onClick={() => setUserAuth({ role: 'guest', name: '손님', provider: null })} style={{ background: 'none', border: 'none', fontSize: '12px', color: '#ef4444', cursor: 'pointer' }}>{t.nav.logout}</button>
@@ -528,13 +408,6 @@ export default function BadaPage() {
           </div>
         </div>
       </header>
-
-      {/* 관리자 모드 활성화 알림 바 */}
-      {userAuth.role === 'admin' && (
-        <div style={{ backgroundColor: '#0284c7', color: '#fff', padding: '10px 20px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold' }}>
-          🛠️ 총괄 관리자 모드 접속 중: 요금제 및 대리점/수령매장 항목의 [수정], [삭제], [+ 추가] 버튼을 사용하여 실시간 관리할 수 있습니다.
-        </div>
-      )}
 
       {/* 2. 히어로 섹션 */}
       <section style={{ backgroundColor: '#0b1329', color: '#ffffff', padding: '70px 20px 80px 20px', textAlign: 'center' }}>
@@ -579,24 +452,14 @@ export default function BadaPage() {
         </div>
       </section>
 
-      {/* 3. 유심 요금제 섹션 (관리자 추가/수정/삭제 지원) */}
+      {/* 3. 유심 요금제 섹션 */}
       <section id="plans" style={{ maxWidth: '1140px', margin: '0 auto', padding: '70px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px' }}>
-          <div>
-            <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>{t.plansSec.title}</h2>
-            <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{t.plansSec.sub}</p>
-          </div>
-          {userAuth.role === 'admin' && (
-            <button 
-              onClick={handleOpenAddPlan} 
-              style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              ➕ 새 요금제 추가
-            </button>
-          )}
+        <div style={{ marginBottom: '40px' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>{t.plansSec.title}</h2>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{t.plansSec.sub}</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
           {plans.map((plan) => (
             <div key={plan.id} style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: plan.isBest ? '2px solid #0284c7' : '1px solid #e2e8f0', padding: '24px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
               {plan.isBest && (
@@ -604,7 +467,7 @@ export default function BadaPage() {
                   {t.plansSec.best}
                 </span>
               )}
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>{plan.icon || '📶'}</div>
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>{plan.icon}</div>
               <div style={{ fontSize: '17px', fontWeight: 'bold' }}>{plan.name}</div>
               <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '14px' }}>{plan.sub}</div>
               <div style={{ fontSize: '24px', fontWeight: '900', color: '#0284c7', marginBottom: '16px' }}>
@@ -612,35 +475,17 @@ export default function BadaPage() {
               </div>
 
               <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.8', flex: 1, borderTop: '1px solid #f1f5f9', paddingTop: '14px', marginBottom: '20px' }}>
-                {plan.desc.split('\n').map((d, idx) => (
+                {plan.desc.map((d, idx) => (
                   <div key={idx}>✓ {d}</div>
                 ))}
               </div>
 
-              {/* 관리자 액션 버튼 */}
-              {userAuth.role === 'admin' ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <button 
-                    onClick={() => handleOpenEditPlan(plan)}
-                    style={{ padding: '8px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    ✏️ 수정
-                  </button>
-                  <button 
-                    onClick={() => handleDeletePlan(plan.id)}
-                    style={{ padding: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    🗑️ 삭제
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => { setSelectedPlanForModal(plan.name); setShowApplyModal(true); }}
-                  style={{ width: '100%', padding: '12px', backgroundColor: plan.isBest ? '#0284c7' : '#f1f5f9', color: plan.isBest ? '#ffffff' : '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
-                >
-                  {t.plansSec.applyBtn}
-                </button>
-              )}
+              <button 
+                onClick={() => { setSelectedPlanForModal(plan.name); setShowApplyModal(true); }}
+                style={{ width: '100%', padding: '12px', backgroundColor: plan.isBest ? '#0284c7' : '#f1f5f9', color: plan.isBest ? '#ffffff' : '#334155', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+              >
+                {t.plansSec.applyBtn}
+              </button>
             </div>
           ))}
         </div>
@@ -666,7 +511,6 @@ export default function BadaPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-            {/* KT */}
             <div style={{ backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>KT 인터넷</span>
@@ -679,7 +523,6 @@ export default function BadaPage() {
               </button>
             </div>
 
-            {/* SK */}
             <div style={{ backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#ea580c' }}>SK 브로드밴드</span>
@@ -692,7 +535,6 @@ export default function BadaPage() {
               </button>
             </div>
 
-            {/* LG */}
             <div style={{ backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#db2777' }}>LG U+</span>
@@ -778,7 +620,7 @@ export default function BadaPage() {
         </div>
       </section>
 
-      {/* 6. 수령 방식 및 매장 안내 섹션 (관리자 추가/수정/삭제 지원) */}
+      {/* 6. 수령 방식 및 매장 안내 섹션 */}
       <section id="delivery" style={{ backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '70px 20px' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto' }}>
           <div style={{ marginBottom: '40px' }}>
@@ -798,33 +640,15 @@ export default function BadaPage() {
           </div>
 
           <div style={{ backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
-                {t.deliverySec.storeTitle} ({stores.length})
-              </h3>
-              {userAuth.role === 'admin' && (
-                <button 
-                  onClick={handleOpenAddStore}
-                  style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                >
-                  ➕ 새 대리점 등록
-                </button>
-              )}
-            </div>
-
+            <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#0f172a' }}>
+              {t.deliverySec.storeTitle} ({stores.length})
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
               {stores.map((s) => (
-                <div key={s.id} style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', position: 'relative' }}>
+                <div key={s.id} style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#0284c7' }}>{s.name}</div>
                   <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{s.address}</div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>📞 {s.phone}</div>
-
-                  {userAuth.role === 'admin' && (
-                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
-                      <button onClick={() => handleOpenEditStore(s)} style={{ flex: 1, padding: '5px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
-                      <button onClick={() => handleDeleteStore(s.id)} style={{ flex: 1, padding: '5px', backgroundColor: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>삭제</button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -915,111 +739,22 @@ export default function BadaPage() {
         </div>
       )}
 
-      {/* 11. 로그인 모달 */}
+      {/* 11. 순수 고객 소셜 로그인 모달 */}
       {showLoginModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '380px', padding: '28px', position: 'relative' }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '360px', padding: '28px', position: 'relative' }}>
             <button onClick={() => setShowLoginModal(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px', marginBottom: '20px' }}>
-              <button type="button" onClick={() => setLoginTab('social')} style={{ padding: '8px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: loginTab === 'social' ? '#ffffff' : 'transparent', color: loginTab === 'social' ? '#0284c7' : '#64748b' }}>고객 간편 로그인</button>
-              <button type="button" onClick={() => setLoginTab('admin')} style={{ padding: '8px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: loginTab === 'admin' ? '#ffffff' : 'transparent', color: loginTab === 'admin' ? '#0284c7' : '#64748b' }}>관리자 / 직원</button>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', textAlign: 'center' }}>간편 로그인</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button type="button" onClick={() => handleSocialLogin('Google', 'Google User')} style={{ width: '100%', padding: '11px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>🌐 Google 계속하기</button>
+              <button type="button" onClick={() => handleSocialLogin('WeChat', '微信 客户')} style={{ width: '100%', padding: '11px', backgroundColor: '#07c160', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>💬 WeChat (微信) 登录</button>
+              <button type="button" onClick={() => handleSocialLogin('Zalo', 'Khách hàng Zalo')} style={{ width: '100%', padding: '11px', backgroundColor: '#0068ff', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>📱 Zalo Đăng nhập (Việt Nam)</button>
             </div>
-            {loginTab === 'social' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button type="button" onClick={() => handleSocialLogin('Google', 'Google User')} style={{ width: '100%', padding: '11px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>🌐 Google 계속하기</button>
-                <button type="button" onClick={() => handleSocialLogin('WeChat', '微信 客户')} style={{ width: '100%', padding: '11px', backgroundColor: '#07c160', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>💬 WeChat (微信) 登录</button>
-                <button type="button" onClick={() => handleSocialLogin('Zalo', 'Khách hàng Zalo')} style={{ width: '100%', padding: '11px', backgroundColor: '#0068ff', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>📱 Zalo Đăng nhập (Việt Nam)</button>
-              </div>
-            ) : (
-              <form onSubmit={handleAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input type="text" placeholder="관리자 아이디 (admin)" value={loginForm.id} onChange={(e) => setLoginForm({ ...loginForm, id: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
-                <input type={showPassword ? 'text' : 'password'} placeholder="비밀번호 (1234)" value={loginForm.pw} onChange={(e) => setLoginForm({ ...loginForm, pw: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
-                <button type="submit" style={{ padding: '12px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}>보안 로그인</button>
-              </form>
-            )}
           </div>
         </div>
       )}
 
-      {/* 12. [관리자 전용] 요금제 추가 / 수정 모달 */}
-      {showPlanEditModal && editingPlan && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
-            <button onClick={() => setShowPlanEditModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#0f172a' }}>
-              {editingPlan.id ? '🛠️ 요금제 수정' : '➕ 새 요금제 등록'}
-            </h3>
-            <form onSubmit={handleSavePlan} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>요금제 이름</label>
-                <input type="text" value={editingPlan.name} onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} required />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>가격 (숫자 또는 쉼표)</label>
-                  <input type="text" value={editingPlan.price} onChange={(e) => setEditingPlan({ ...editingPlan, price: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} required />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>단위 (/월, /5일 등)</label>
-                  <input type="text" value={editingPlan.unit} onChange={(e) => setEditingPlan({ ...editingPlan, unit: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>아이콘 이모지</label>
-                  <input type="text" value={editingPlan.icon} onChange={(e) => setEditingPlan({ ...editingPlan, icon: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>요약 설명</label>
-                  <input type="text" value={editingPlan.sub} onChange={(e) => setEditingPlan({ ...editingPlan, sub: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>세부 혜택 목록 (줄바꿈으로 구분)</label>
-                <textarea rows={4} value={editingPlan.desc} onChange={(e) => setEditingPlan({ ...editingPlan, desc: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px', resize: 'vertical' }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input type="checkbox" id="isBest" checked={editingPlan.isBest} onChange={(e) => setEditingPlan({ ...editingPlan, isBest: e.target.checked })} />
-                <label htmlFor="isBest" style={{ fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>인기 추천(BEST) 뱃지 표시</label>
-              </div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '8px' }}>
-                저장하기
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 13. [관리자 전용] 대리점/매장 추가 / 수정 모달 */}
-      {showStoreEditModal && editingStore && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '420px', padding: '28px', position: 'relative' }}>
-            <button onClick={() => setShowStoreEditModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: '#0f172a' }}>
-              {editingStore.isEditing ? '🛠️ 대리점 정보 수정' : '➕ 새 대리점 등록'}
-            </h3>
-            <form onSubmit={handleSaveStore} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>매장명</label>
-                <input type="text" value={editingStore.name} onChange={(e) => setEditingStore({ ...editingStore, name: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>주소 (찾아오는 길)</label>
-                <input type="text" value={editingStore.address} onChange={(e) => setEditingStore({ ...editingStore, address: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>전화번호</label>
-                <input type="text" value={editingStore.phone} onChange={(e) => setEditingStore({ ...editingStore, phone: e.target.value })} style={{ width: '100%', padding: '9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', marginTop: '4px' }} />
-              </div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '8px' }}>
-                저장하기
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 14. 챗봇 상담창 */}
+      {/* 12. 챗봇 상담창 */}
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50 }}>
         {!showChat ? (
           <button onClick={() => setShowChat(true)} style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', fontSize: '24px', boxShadow: '0 4px 16px rgba(2,132,199,0.4)', cursor: 'pointer' }}>
