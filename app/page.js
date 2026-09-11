@@ -288,7 +288,7 @@ const translations = {
       { q: "Người nước ngoài có thuê máy lọc nước được không?", a: "Có, chỉ cần Thẻ cư trú (ARC) và tài khoản ngân hàng là đăng ký được ngay." }
     ],
     bot: {
-      title: 'Trung Tâm Hỗ Trợ BADA 1:1',
+      title: 'Trung Tâm Hỗ TrỢ BADA 1:1',
       subtitle: 'Hỏi Đáp Nhanh & Trò Chuyện Trực Tuyến',
       welcome: 'Xin chào! Chào mừng bạn đến với trung tâm hỗ trợ BADA.\nHãy chọn câu hỏi bên dưới hoặc nhắn tin trực tiếp với nhân viên.',
       backToMenu: '↩ Quay lại menu',
@@ -321,7 +321,17 @@ export default function BadaPage() {
   const [openFaq, setOpenFaq] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const [userAuth, setUserAuth] = useState({ role: 'guest', name: '손님', provider: null });
+  // [회원 시스템]: 현재 로그인된 사용자 상태 (고객 화면에는 userCode 노출 안 함)
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // [회원 데이터베이스]: 로컬스토리지 bada_user_db 연동
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+
+  // 로그인/회원가입 모달 내부 탭 및 폼 상태
+  const [authTab, setAuthTab] = useState('login'); // 'login' | 'register'
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [regForm, setRegForm] = useState({ username: '', password: '', name: '', phone: '' });
+  const [regError, setRegError] = useState('');
 
   // 1:1 라이브 채팅 모드 & 상태
   const [botMode, setBotMode] = useState('faq'); // 'faq' | 'topic_detail' | 'staff_chat'
@@ -332,8 +342,39 @@ export default function BadaPage() {
   const [customerInput, setCustomerInput] = useState('');
   const [clientSessionId, setClientSessionId] = useState('');
 
-  // 고유 고객 세션 ID 생성 및 관리자 메시지 실시간 수신 리스너
+  // 회원 DB 로드 및 세션 초기화
   useEffect(() => {
+    // 1. 회원 DB 로드 (없으면 기본 샘플 유저 세팅)
+    const storedUsers = localStorage.getItem('bada_user_db');
+    if (storedUsers) {
+      try {
+        setRegisteredUsers(JSON.parse(storedUsers));
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      const initialUsers = [
+        { userCode: '0000_0000_0001', username: 'alex99', name: 'NGUYEN VAN A', phone: '010-9988-7766', createdAt: '2026-09-10' },
+        { userCode: '0000_0000_0002', username: 'zhangwei', name: 'ZHANG WEI', phone: '010-3322-1144', createdAt: '2026-09-11' }
+      ];
+      localStorage.setItem('bada_user_db', JSON.stringify(initialUsers));
+      setRegisteredUsers(initialUsers);
+    }
+
+    // 2. 현재 로그인 세션 확인
+    const loggedUser = localStorage.getItem('bada_current_login');
+    if (loggedUser) {
+      try {
+        const u = JSON.parse(loggedUser);
+        setCurrentUser(u);
+        setForm(prev => ({ ...prev, name: u.name, phone: u.phone }));
+        setInternetForm(prev => ({ ...prev, name: u.name, phone: u.phone }));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // 3. 고유 고객 세션 ID 생성
     let sid = localStorage.getItem('bada_user_sid');
     if (!sid) {
       sid = 'customer_' + Math.random().toString(36).substring(2, 8);
@@ -341,6 +382,7 @@ export default function BadaPage() {
     }
     setClientSessionId(sid);
 
+    // 4. 관리자 채팅 메시지 실시간 수신 리스너
     const handleStorageChange = () => {
       const allChatsStr = localStorage.getItem('bada_live_chat_rooms');
       if (allChatsStr) {
@@ -393,12 +435,121 @@ export default function BadaPage() {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleSocialLogin = (platform, displayName) => {
-    setUserAuth({ role: 'customer', name: displayName, provider: platform });
-    setForm(prev => ({ ...prev, name: displayName }));
-    setInternetForm(prev => ({ ...prev, name: displayName }));
+  // [1] 구글/위챗 연동 핸들러 (Client ID 있으면 바로 인증 연결, 없으면 "준비 중" 안내)
+  const handleSocialAuthClick = (provider) => {
+    if (provider === 'google') {
+      const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      if (googleClientId) {
+        // 실제 Client ID가 있으면 공식 구글 로그인 창 호출
+        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=token&scope=email%20profile`;
+      } else {
+        alert('구글 로그인 연동은 현재 준비 중입니다.');
+      }
+    } else if (provider === 'wechat') {
+      const wechatAppId = process.env.NEXT_PUBLIC_WECHAT_APP_ID;
+      if (wechatAppId) {
+        window.location.href = `https://open.weixin.qq.com/connect/qrconnect?appid=${wechatAppId}&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=code&scope=snsapi_login#wechat_redirect`;
+      } else {
+        alert('위챗 로그인 연동은 현재 준비 중입니다.');
+      }
+    }
+  };
+
+  // [2] 자체 회원가입 처리 (아이디 실시간 중복 체크 & 0000_0000_0001 순차 번호 부여)
+  const handleRegisterSubmit = (e) => {
+    e.preventDefault();
+    const cleanUsername = regForm.username.trim();
+
+    if (!cleanUsername || cleanUsername.length < 3) {
+      setRegError('아이디는 영문/숫자 3자 이상이어야 합니다.');
+      return;
+    }
+
+    // 아이디 중복 검사
+    const isDuplicate = registeredUsers.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+    if (isDuplicate) {
+      setRegError('⚠️ 이미 사용 중인 중복된 아이디입니다!');
+      return;
+    }
+
+    if (!regForm.password || regForm.password.length < 4) {
+      setRegError('비밀번호는 4자 이상이어야 합니다.');
+      return;
+    }
+
+    if (!regForm.name.trim() || !regForm.phone.trim()) {
+      setRegError('성함과 연락처를 모두 입력해 주세요.');
+      return;
+    }
+
+    // 순차적 관리번호 생성: 0000_0000_0001
+    const nextSeq = String(registeredUsers.length + 1).padStart(12, '0');
+    const formattedUserCode = `${nextSeq.slice(0, 4)}_${nextSeq.slice(4, 8)}_${nextSeq.slice(8, 12)}`;
+
+    const newUser = {
+      userCode: formattedUserCode,
+      username: cleanUsername,
+      name: regForm.name.trim(),
+      phone: regForm.phone.trim(),
+      password: regForm.password,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    const updated = [...registeredUsers, newUser];
+    setRegisteredUsers(updated);
+    localStorage.setItem('bada_user_db', JSON.stringify(updated));
+
+    // 로그인 처리 (고객 화면에는 아이디와 성함만 전달)
+    const sessionUser = {
+      userCode: newUser.userCode,
+      username: newUser.username,
+      name: newUser.name,
+      phone: newUser.phone
+    };
+    setCurrentUser(sessionUser);
+    localStorage.setItem('bada_current_login', JSON.stringify(sessionUser));
+
+    // 신청서 폼 자동 완성
+    setForm(prev => ({ ...prev, name: sessionUser.name, phone: sessionUser.phone }));
+    setInternetForm(prev => ({ ...prev, name: sessionUser.name, phone: sessionUser.phone }));
+
+    setRegError('');
     setShowLoginModal(false);
-    alert(`${platform} 로그인 완료: ${displayName}`);
+    alert(`회원가입이 완료되었습니다! 환영합니다, ${sessionUser.username}님.`);
+  };
+
+  // [3] 자체 로그인 처리
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    const cleanId = loginForm.username.trim().toLowerCase();
+    const user = registeredUsers.find(u => u.username.toLowerCase() === cleanId && (!u.password || u.password === loginForm.password));
+
+    if (!user) {
+      alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+      return;
+    }
+
+    const sessionUser = {
+      userCode: user.userCode,
+      username: user.username,
+      name: user.name,
+      phone: user.phone
+    };
+    setCurrentUser(sessionUser);
+    localStorage.setItem('bada_current_login', JSON.stringify(sessionUser));
+
+    setForm(prev => ({ ...prev, name: sessionUser.name, phone: sessionUser.phone }));
+    setInternetForm(prev => ({ ...prev, name: sessionUser.name, phone: sessionUser.phone }));
+
+    setShowLoginModal(false);
+    alert(`반갑습니다, ${sessionUser.username}님!`);
+  };
+
+  // 로그아웃 처리
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('bada_current_login');
+    alert('로그아웃되었습니다.');
   };
 
   const handleApplySubmit = (e) => {
@@ -413,10 +564,9 @@ export default function BadaPage() {
     if (!internetForm.name || !internetForm.phone) return alert('성함과 연락처를 입력해주세요.');
     alert('인터넷/렌탈 상담 접수가 완료되었습니다! 직원이 빠르게 1:1 상담 안내를 드립니다.');
     setShowInternetModal(false);
-    setInternetForm({ name: '', phone: '', carrier: 'KT', speed: '500M', address: '' });
   };
 
-  // 고객 메시지 전송 및 언어 정보 동기화
+  // 고객 메시지 전송
   const handleSendCustomerMessage = (e) => {
     e.preventDefault();
     if (!customerInput.trim()) return;
@@ -429,10 +579,15 @@ export default function BadaPage() {
     try {
       const allChatsStr = localStorage.getItem('bada_live_chat_rooms') || '{}';
       const allChats = JSON.parse(allChatsStr);
+      
+      const displayName = currentUser ? `${currentUser.username} (${currentUser.name})` : `외국인 고객 (${clientSessionId.slice(-4)})`;
+      const displayCode = currentUser ? currentUser.userCode : '비회원';
+
       allChats[clientSessionId] = {
         sessionId: clientSessionId,
-        userName: userAuth.name !== '손님' ? userAuth.name : `외국인 고객 (${clientSessionId.slice(-4)})`,
-        lang: lang, // 현재 사용 중인 언어 전달
+        userName: displayName,
+        userCode: displayCode,
+        lang: lang,
         lastMessage: customerInput.trim(),
         lastTime: timeStr,
         unreadCount: (allChats[clientSessionId]?.unreadCount || 0) + 1,
@@ -465,14 +620,17 @@ export default function BadaPage() {
           </nav>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {userAuth.role === 'guest' ? (
-              <button onClick={() => setShowLoginModal(true)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+            {/* 로그인 상태: 회원번호는 숨기고 [아이디 님]만 노출 */}
+            {!currentUser ? (
+              <button onClick={() => { setShowLoginModal(true); setAuthTab('login'); }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
                 <span>👤</span> {t.nav.login}
               </button>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '6px' }}>{userAuth.name}</span>
-                <button onClick={() => setUserAuth({ role: 'guest', name: '손님', provider: null })} style={{ background: 'none', border: 'none', fontSize: '12px', color: '#ef4444', cursor: 'pointer' }}>{t.nav.logout}</button>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#0369a1', backgroundColor: '#e0f2fe', padding: '5px 12px', borderRadius: '20px' }}>
+                  👤 {currentUser.username} 님
+                </span>
+                <button onClick={handleLogout} style={{ background: 'none', border: 'none', fontSize: '12px', color: '#ef4444', cursor: 'pointer', textDecoration: 'underline' }}>{t.nav.logout}</button>
               </div>
             )}
 
@@ -493,6 +651,7 @@ export default function BadaPage() {
         </div>
       </header>
 
+      {/* 히어로 섹션 */}
       <section style={{ backgroundColor: '#0b1329', color: '#ffffff', padding: '70px 20px 80px 20px', textAlign: 'center' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '30px', padding: '6px 14px', fontSize: '13px', color: '#7dd3fc', marginBottom: '22px' }}>
@@ -518,6 +677,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 요금제 섹션 */}
       <section id="plans" style={{ maxWidth: '1140px', margin: '0 auto', padding: '70px 20px' }}>
         <div style={{ marginBottom: '40px' }}>
           <h2 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px 0' }}>{t.plansSec.title}</h2>
@@ -548,6 +708,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 인터넷 섹션 */}
       <section id="internet" style={{ backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '70px 20px' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
@@ -580,6 +741,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 가전/렌탈 섹션 */}
       <section id="rental" style={{ maxWidth: '1140px', margin: '0 auto', padding: '70px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
           <div>
@@ -617,6 +779,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 한패스 섹션 */}
       <section id="hanpass" style={{ maxWidth: '1140px', margin: '0 auto', padding: '0 20px 70px 20px' }}>
         <div style={{ backgroundColor: '#064e3b', color: '#ffffff', borderRadius: '24px', padding: '40px', position: 'relative' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px', alignItems: 'center' }}>
@@ -659,6 +822,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 수령 매장 섹션 */}
       <section id="delivery" style={{ backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '70px 20px' }}>
         <div style={{ maxWidth: '1140px', margin: '0 auto' }}>
           <div style={{ marginBottom: '40px' }}>
@@ -690,6 +854,7 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* FAQ 섹션 */}
       <section id="faq" style={{ maxWidth: '780px', margin: '0 auto', padding: '70px 20px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#e0f2fe', color: '#0284c7', fontSize: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>❓</div>
@@ -707,12 +872,104 @@ export default function BadaPage() {
         </div>
       </section>
 
+      {/* 푸터 */}
       <footer style={{ backgroundColor: '#0f172a', color: '#94a3b8', padding: '40px 20px', textAlign: 'center', fontSize: '13px', lineHeight: '1.8' }}>
         <div style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '16px', marginBottom: '8px' }}>BADA - 바다 외국인 통신 & 생활 금융 허브</div>
         <div>충남 천안시 동남구 대흥로 (천안 본점) | 온라인 1:1 실시간 상담 상시 지원</div>
         <div style={{ marginTop: '12px', color: '#64748b' }}>공식 파트너십: 백메가(인터넷) · 한패스(해외송금) · 쿠쿠렌탈 | © 2026 BADA. All rights reserved.</div>
       </footer>
 
+      {/* [통합 회원가입 & 로그인 모달] */}
+      {showLoginModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '380px', padding: '28px', position: 'relative', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+            <button onClick={() => { setShowLoginModal(false); setRegError(''); }} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
+            
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+              <button onClick={() => { setAuthTab('login'); setRegError(''); }} style={{ flex: 1, padding: '8px', border: 'none', background: 'none', fontSize: '15px', fontWeight: 'bold', color: authTab === 'login' ? '#0284c7' : '#94a3b8', borderBottom: authTab === 'login' ? '2px solid #0284c7' : 'none', cursor: 'pointer' }}>
+                로그인
+              </button>
+              <button onClick={() => { setAuthTab('register'); setRegError(''); }} style={{ flex: 1, padding: '8px', border: 'none', background: 'none', fontSize: '15px', fontWeight: 'bold', color: authTab === 'register' ? '#0284c7' : '#94a3b8', borderBottom: authTab === 'register' ? '2px solid #0284c7' : 'none', cursor: 'pointer' }}>
+                새 계정 만들기
+              </button>
+            </div>
+
+            {/* 소셜 연동 버튼 (Client ID 대기 중) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
+              <button type="button" onClick={() => handleSocialAuthClick('google')} style={{ width: '100%', padding: '10px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span>🌐</span> Google로 1초 시작하기
+              </button>
+              <button type="button" onClick={() => handleSocialAuthClick('wechat')} style={{ width: '100%', padding: '10px', backgroundColor: '#07c160', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span>💬</span> WeChat (微信) 快速登录
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', margin: '14px 0', gap: '10px' }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>또는 자체 계정</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+            </div>
+
+            {/* 탭 1: 자체 로그인 폼 */}
+            {authTab === 'login' ? (
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <input type="text" placeholder="아이디" value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
+                <input type="password" placeholder="비밀번호" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
+                <button type="submit" style={{ padding: '12px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>
+                  로그인
+                </button>
+              </form>
+            ) : (
+              /* 탭 2: 자체 회원가입 폼 (중복 체크 경고 탑재) */
+              <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div>
+                  <input 
+                    type="text" 
+                    placeholder="사용할 아이디 (영문/숫자)" 
+                    value={regForm.username} 
+                    onChange={(e) => { setRegForm({ ...regForm, username: e.target.value }); setRegError(''); }} 
+                    style={{ width: '100%', padding: '11px', borderRadius: '8px', border: regError.includes('아이디') ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} 
+                    required 
+                  />
+                  {regError && <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>{regError}</div>}
+                </div>
+                <input type="password" placeholder="비밀번호" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
+                <input type="text" placeholder="여권상 영문 성함 (Name)" value={regForm.name} onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
+                <input type="tel" placeholder="연락처 또는 이메일 (Phone/Email)" value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} style={{ padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} required />
+                <button type="submit" style={{ padding: '12px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>
+                  가입 완료하고 시작하기
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 유심 신청 모달 (로그인 정보 자동 완성) */}
+      {showApplyModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '460px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowApplyModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
+            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 6px 0' }}>유심 간편 신청서</h3>
+            {currentUser && <div style={{ fontSize: '12px', color: '#0284c7', marginBottom: '8px' }}>👤 {currentUser.username} 회원님 정보로 자동 완성되었습니다.</div>}
+            <form onSubmit={handleApplySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
+              <input type="text" placeholder="👤 성함 (여권 영문명 / Name) *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} required />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <input type="email" placeholder="✉️ 이메일 (Email)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} />
+                <input type="tel" placeholder="📞 연락처 (Phone) *" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} required />
+              </div>
+              <select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff' }}>
+                {simPlans.map(p => (<option key={p.id} value={p.name}>{p.name} (₩ {p.price})</option>))}
+              </select>
+              <button type="submit" style={{ width: '100%', padding: '13px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>
+                신청 완료 (Submit)
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 인터넷 모달 */}
       {showInternetModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '440px', padding: '28px', position: 'relative' }}>
@@ -735,42 +992,6 @@ export default function BadaPage() {
         </div>
       )}
 
-      {showApplyModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '460px', padding: '28px', position: 'relative' }}>
-            <button onClick={() => setShowApplyModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: '0 0 6px 0' }}>유심 간편 신청서</h3>
-            <form onSubmit={handleApplySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
-              <input type="text" placeholder="👤 성함 (여권 영문명 / Name) *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} required />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <input type="email" placeholder="✉️ 이메일 (Email)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} />
-                <input type="tel" placeholder="📞 연락처 (Phone) *" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }} required />
-              </div>
-              <select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff' }}>
-                {simPlans.map(p => (<option key={p.id} value={p.name}>{p.name} (₩ {p.price})</option>))}
-              </select>
-              <button type="submit" style={{ width: '100%', padding: '13px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>
-                신청 완료 (Submit)
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showLoginModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '18px', width: '100%', maxWidth: '360px', padding: '28px', position: 'relative' }}>
-            <button onClick={() => setShowLoginModal(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '20px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', textAlign: 'center' }}>간편 로그인</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button type="button" onClick={() => handleSocialLogin('Google', 'Google User')} style={{ width: '100%', padding: '11px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>🌐 Google 계속하기</button>
-              <button type="button" onClick={() => handleSocialLogin('WeChat', '微信 客户')} style={{ width: '100%', padding: '11px', backgroundColor: '#07c160', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>💬 WeChat (微信) 登录</button>
-              <button type="button" onClick={() => handleSocialLogin('Zalo', 'Khách hàng Zalo')} style={{ width: '100%', padding: '11px', backgroundColor: '#0068ff', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>📱 Zalo Đăng nhập (Việt Nam)</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 실시간 1:1 고객 채팅 모달 */}
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50 }}>
         {!showChat ? (
@@ -783,12 +1004,11 @@ export default function BadaPage() {
         ) : (
           <div style={{ width: '360px', height: '520px', backgroundColor: '#ffffff', borderRadius: '20px', boxShadow: '0 12px 35px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
             
-            {/* 챗봇 헤더 */}
             <div style={{ backgroundColor: '#0284c7', color: '#ffffff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 'bold' }}>{t.bot.title}</div>
                 <div style={{ fontSize: '11px', color: '#bae6fd' }}>
-                  {botMode === 'staff_chat' ? '👨‍💼 직원 1:1 실시간 대화 중' : t.bot.subtitle}
+                  {botMode === 'staff_chat' ? (currentUser ? `👤 ${currentUser.username}님 1:1 전담 대화` : '👨‍💼 직원 1:1 실시간 대화 중') : t.bot.subtitle}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -801,119 +1021,43 @@ export default function BadaPage() {
               </div>
             </div>
 
-            {/* 본문 1: FAQ 메뉴 모드 */}
             {botMode === 'faq' && (
               <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', backgroundColor: '#f8fafc' }}>
                 <div style={{ padding: '12px 14px', borderRadius: '14px', backgroundColor: '#ffffff', color: '#1e293b', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
                   {t.bot.welcome}
                 </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-                  <button onClick={() => { setCurrentTopic('sim'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuSim}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('internet'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuInternet}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('rental'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuRental}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('hanpass'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuHanpass}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('stores'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuStore}
-                  </button>
-                  <button onClick={() => setBotMode('staff_chat')} style={{ padding: '12px 14px', textAlign: 'left', backgroundColor: '#0284c7', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#ffffff', cursor: 'pointer', boxShadow: '0 2px 6px rgba(2,132,199,0.3)' }}>
-                    {t.bot.startStaffChat}
-                  </button>
+                  <button onClick={() => { setCurrentTopic('sim'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>{t.bot.menuSim}</button>
+                  <button onClick={() => { setCurrentTopic('internet'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>{t.bot.menuInternet}</button>
+                  <button onClick={() => { setCurrentTopic('rental'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>{t.bot.menuRental}</button>
+                  <button onClick={() => { setCurrentTopic('hanpass'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>{t.bot.menuHanpass}</button>
+                  <button onClick={() => { setCurrentTopic('stores'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>{t.bot.menuStore}</button>
+                  <button onClick={() => setBotMode('staff_chat')} style={{ padding: '12px 14px', textAlign: 'left', backgroundColor: '#0284c7', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#ffffff', cursor: 'pointer' }}>{t.bot.startStaffChat}</button>
                 </div>
               </div>
             )}
 
-            {/* 본문 2: FAQ 상세 안내 모드 */}
             {botMode === 'topic_detail' && (
               <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', backgroundColor: '#f8fafc' }}>
                 <div style={{ padding: '14px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', lineHeight: '1.6' }}>
-                  {currentTopic === 'sim' && (
-                    <div>
-                      <strong>📶 유심/eSIM 개통</strong><br/><br/>
-                      • 여권 또는 외국인등록증(ARC)만 있으면 5분 만에 즉시 개통됩니다.<br/>
-                      • 외국인등록증 개통 시 은행 계좌 개설 및 본인인증(PASS)이 완벽 지원됩니다.<br/>
-                      • 대표 요금제: 무제한 30일(월 39,600원, 통화/문자/데이터 무제한)
-                    </div>
-                  )}
-                  {currentTopic === 'internet' && (
-                    <div>
-                      <strong>🌐 초고속 인터넷+TV 사은품</strong><br/><br/>
-                      • 외국인 명의도 내국인과 동일하게 법정 최대 현금 사은품(최대 47만원)을 설치 당일 즉시 계좌로 입금해 드립니다.<br/>
-                      • KT, SK, LG 통신 3사 모두 지원하며, 바다 유심과 결합 시 첫 달 추가 할인이 지원됩니다.
-                    </div>
-                  )}
-                  {currentTopic === 'rental' && (
-                    <div>
-                      <strong>💧 정수기/가전 렌탈</strong><br/><br/>
-                      • 외국인등록증(ARC)만 있으면 간편 심사로 당일 접수 지원합니다.<br/>
-                      • 쿠쿠 슬림 정수기 월 19,900원부터! 등록비 및 설치비 0원 전액 면제 혜택.
-                    </div>
-                  )}
-                  {currentTopic === 'hanpass' && (
-                    <div>
-                      <strong>💸 한패스 해외송금 우대</strong><br/><br/>
-                      • 바다 공식 프로모션 코드: <strong>[BADA2026]</strong><br/>
-                      • 첫 송금 수수료 0원 무료 쿠폰 및 100% 우대 환율이 자동 적용됩니다.
-                    </div>
-                  )}
-                  {currentTopic === 'stores' && (
-                    <div>
-                      <strong>🏬 오프라인 픽업 매장</strong><br/><br/>
-                      📍 천안 본점: 천안시 동남구 대흥로 (천안역 3분)<br/>
-                      📍 안산 다문화거리점: 경기 안산시 단원구 원곡동<br/>
-                      📍 수원역점: 경기 수원시 팔달구 매산로<br/>
-                      (방문 시 여권 또는 외국인등록증 실물 필수)
-                    </div>
-                  )}
+                  {currentTopic === 'sim' && <div><strong>📶 유심/eSIM 개통</strong><br/><br/>• 여권 또는 외국인등록증(ARC) 5분 개통 지원.<br/>• 외국인등록증 개통 시 은행 계좌 및 PASS 본인인증 지원.</div>}
+                  {currentTopic === 'internet' && <div><strong>🌐 초고속 인터넷+TV 사은품</strong><br/><br/>• 외국인 명의도 동일하게 법정 최대 현금 사은품(최대 47만원) 당일 계좌 입금.</div>}
+                  {currentTopic === 'rental' && <div><strong>💧 정수기/가전 렌탈</strong><br/><br/>• 등록증 간편 심사, 등록비/설치비 전액 면제 혜택.</div>}
+                  {currentTopic === 'hanpass' && <div><strong>💸 한패스 해외송금</strong><br/><br/>• 전용 코드: [BADA2026], 첫 송금 수수료 0원.</div>}
+                  {currentTopic === 'stores' && <div><strong>🏬 픽업 매장</strong><br/><br/>📍 천안 본점(천안역 3분), 안산점, 수원역점.</div>}
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {currentTopic === 'sim' && (
-                    <button onClick={() => { setShowApplyModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openSimBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'internet' && (
-                    <button onClick={() => { setShowInternetModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openInternetBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'rental' && (
-                    <button onClick={() => { setShowInternetModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openRentalBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'hanpass' && (
-                    <button onClick={handleCopyPartnerCode} style={{ padding: '10px', backgroundColor: '#059669', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {copiedCode ? '✓ Copied!' : t.bot.copyCodeBtn}
-                    </button>
-                  )}
-                  <button onClick={() => setBotMode('staff_chat')} style={{ padding: '10px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {t.bot.startStaffChat}
-                  </button>
-                  <button onClick={() => setBotMode('faq')} style={{ padding: '9px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {t.bot.backToMenu}
-                  </button>
-                </div>
+                <button onClick={() => setBotMode('staff_chat')} style={{ padding: '10px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>{t.bot.startStaffChat}</button>
+                <button onClick={() => setBotMode('faq')} style={{ padding: '9px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>{t.bot.backToMenu}</button>
               </div>
             )}
 
-            {/* 본문 3: 직원 1:1 실시간 대화창 */}
             {botMode === 'staff_chat' && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ flex: 1, padding: '14px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', backgroundColor: '#f8fafc' }}>
                   {liveMessages.map((msg, i) => (
                     <div key={i} style={{ alignSelf: msg.sender === 'customer' ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                       <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '2px', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
-                        {msg.sender === 'customer' ? '나 (고객)' : '💼 BADA 담당 직원'} · {msg.time}
+                        {msg.sender === 'customer' ? (currentUser ? `나 (${currentUser.username})` : '나 (고객)') : '💼 BADA 담당 직원'} · {msg.time}
                       </div>
                       <div style={{ padding: '9px 12px', borderRadius: '12px', backgroundColor: msg.sender === 'customer' ? '#0284c7' : '#ffffff', color: msg.sender === 'customer' ? '#ffffff' : '#1e293b', border: msg.sender === 'customer' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
                         {msg.text}
@@ -937,7 +1081,6 @@ export default function BadaPage() {
               </div>
             )}
 
-            {/* 푸터 안내 */}
             <div style={{ padding: '7px 14px', backgroundColor: '#f1f5f9', borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
               온라인 전담 직원이 실시간으로 확인 후 직접 답변을 드립니다.
             </div>
