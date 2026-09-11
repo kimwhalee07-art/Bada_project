@@ -323,7 +323,7 @@ export default function BadaPage() {
 
   const [userAuth, setUserAuth] = useState({ role: 'guest', name: '손님', provider: null });
 
-  // 1:1 라이브 채팅 및 챗봇 상태
+  // 1:1 라이브 채팅 모드 & 상태
   const [botMode, setBotMode] = useState('faq'); // 'faq' | 'topic_detail' | 'staff_chat'
   const [currentTopic, setCurrentTopic] = useState(null);
   const [liveMessages, setLiveMessages] = useState([
@@ -341,7 +341,6 @@ export default function BadaPage() {
     }
     setClientSessionId(sid);
 
-    // 저장소 변경 감지 (관리자/직원이 답장 전송 시 고객 화면에 실시간 노출)
     const handleStorageChange = () => {
       const allChatsStr = localStorage.getItem('bada_live_chat_rooms');
       if (allChatsStr) {
@@ -417,7 +416,7 @@ export default function BadaPage() {
     setInternetForm({ name: '', phone: '', carrier: 'KT', speed: '500M', address: '' });
   };
 
-  // 고객이 직원에게 1:1 실시간 메시지 전송
+  // 고객 메시지 전송 및 언어 정보 동기화
   const handleSendCustomerMessage = (e) => {
     e.preventDefault();
     if (!customerInput.trim()) return;
@@ -427,13 +426,13 @@ export default function BadaPage() {
     const updatedMessages = [...liveMessages, newMsg];
     setLiveMessages(updatedMessages);
 
-    // 관리자 포털 공유 저장소에 동기화
     try {
       const allChatsStr = localStorage.getItem('bada_live_chat_rooms') || '{}';
       const allChats = JSON.parse(allChatsStr);
       allChats[clientSessionId] = {
         sessionId: clientSessionId,
         userName: userAuth.name !== '손님' ? userAuth.name : `외국인 고객 (${clientSessionId.slice(-4)})`,
+        lang: lang, // 현재 사용 중인 언어 전달
         lastMessage: customerInput.trim(),
         lastTime: timeStr,
         unreadCount: (allChats[clientSessionId]?.unreadCount || 0) + 1,
@@ -772,7 +771,7 @@ export default function BadaPage() {
         </div>
       )}
 
-      {/* 실시간 1:1 채팅 & 스마트 챗봇 모달 */}
+      {/* 실시간 1:1 고객 채팅 모달 */}
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50 }}>
         {!showChat ? (
           <button 
@@ -814,139 +813,4 @@ export default function BadaPage() {
                     {t.bot.menuSim}
                   </button>
                   <button onClick={() => { setCurrentTopic('internet'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuInternet}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('rental'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuRental}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('hanpass'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuHanpass}
-                  </button>
-                  <button onClick={() => { setCurrentTopic('stores'); setBotMode('topic_detail'); }} style={{ padding: '11px 14px', textAlign: 'left', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', cursor: 'pointer' }}>
-                    {t.bot.menuStore}
-                  </button>
-                  <button onClick={() => setBotMode('staff_chat')} style={{ padding: '12px 14px', textAlign: 'left', backgroundColor: '#0284c7', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold', color: '#ffffff', cursor: 'pointer', boxShadow: '0 2px 6px rgba(2,132,199,0.3)' }}>
-                    {t.bot.startStaffChat}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 본문 2: FAQ 상세 안내 모드 */}
-            {botMode === 'topic_detail' && (
-              <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', backgroundColor: '#f8fafc' }}>
-                <div style={{ padding: '14px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', lineHeight: '1.6' }}>
-                  {currentTopic === 'sim' && (
-                    <div>
-                      <strong>📶 유심/eSIM 개통</strong><br/><br/>
-                      • 여권 또는 외국인등록증(ARC)만 있으면 5분 만에 즉시 개통됩니다.<br/>
-                      • 외국인등록증 개통 시 은행 계좌 개설 및 본인인증(PASS)이 완벽 지원됩니다.<br/>
-                      • 대표 요금제: 무제한 30일(월 39,600원, 통화/문자/데이터 무제한)
-                    </div>
-                  )}
-                  {currentTopic === 'internet' && (
-                    <div>
-                      <strong>🌐 초고속 인터넷+TV 사은품</strong><br/><br/>
-                      • 외국인 명의도 내국인과 동일하게 법정 최대 현금 사은품(최대 47만원)을 설치 당일 즉시 계좌로 입금해 드립니다.<br/>
-                      • KT, SK, LG 통신 3사 모두 지원하며, 바다 유심과 결합 시 첫 달 추가 할인이 지원됩니다.
-                    </div>
-                  )}
-                  {currentTopic === 'rental' && (
-                    <div>
-                      <strong>💧 정수기/가전 렌탈</strong><br/><br/>
-                      • 외국인등록증(ARC)만 있으면 간편 심사로 당일 접수 지원합니다.<br/>
-                      • 쿠쿠 슬림 정수기 월 19,900원부터! 등록비 및 설치비 0원 전액 면제 혜택.
-                    </div>
-                  )}
-                  {currentTopic === 'hanpass' && (
-                    <div>
-                      <strong>💸 한패스 해외송금 우대</strong><br/><br/>
-                      • 바다 공식 프로모션 코드: <strong>[BADA2026]</strong><br/>
-                      • 첫 송금 수수료 0원 무료 쿠폰 및 100% 우대 환율이 자동 적용됩니다.
-                    </div>
-                  )}
-                  {currentTopic === 'stores' && (
-                    <div>
-                      <strong>🏬 오프라인 픽업 매장</strong><br/><br/>
-                      📍 천안 본점: 천안시 동남구 대흥로 (천안역 3분)<br/>
-                      📍 안산 다문화거리점: 경기 안산시 단원구 원곡동<br/>
-                      📍 수원역점: 경기 수원시 팔달구 매산로<br/>
-                      (방문 시 여권 또는 외국인등록증 실물 필수)
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {currentTopic === 'sim' && (
-                    <button onClick={() => { setShowApplyModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openSimBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'internet' && (
-                    <button onClick={() => { setShowInternetModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openInternetBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'rental' && (
-                    <button onClick={() => { setShowInternetModal(true); setShowChat(false); }} style={{ padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {t.bot.openRentalBtn}
-                    </button>
-                  )}
-                  {currentTopic === 'hanpass' && (
-                    <button onClick={handleCopyPartnerCode} style={{ padding: '10px', backgroundColor: '#059669', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                      {copiedCode ? '✓ Copied!' : t.bot.copyCodeBtn}
-                    </button>
-                  )}
-                  <button onClick={() => setBotMode('staff_chat')} style={{ padding: '10px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {t.bot.startStaffChat}
-                  </button>
-                  <button onClick={() => setBotMode('faq')} style={{ padding: '9px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {t.bot.backToMenu}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 본문 3: 직원 1:1 실시간 대화창 (직원/관리자가 로그인하여 답장하는 모드) */}
-            {botMode === 'staff_chat' && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ flex: 1, padding: '14px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', backgroundColor: '#f8fafc' }}>
-                  {liveMessages.map((msg, i) => (
-                    <div key={i} style={{ alignSelf: msg.sender === 'customer' ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                      <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '2px', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
-                        {msg.sender === 'customer' ? '나 (고객)' : '💼 BADA 담당 직원'} · {msg.time}
-                      </div>
-                      <div style={{ padding: '9px 12px', borderRadius: '12px', backgroundColor: msg.sender === 'customer' ? '#0284c7' : '#ffffff', color: msg.sender === 'customer' ? '#ffffff' : '#1e293b', border: msg.sender === 'customer' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <form onSubmit={handleSendCustomerMessage} style={{ padding: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '6px', backgroundColor: '#ffffff' }}>
-                  <input 
-                    type="text" 
-                    placeholder={t.bot.chatInputPlaceholder} 
-                    value={customerInput} 
-                    onChange={(e) => setCustomerInput(e.target.value)} 
-                    style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} 
-                  />
-                  <button type="submit" style={{ padding: '9px 14px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    {t.bot.send}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* 푸터 안내 */}
-            <div style={{ padding: '7px 14px', backgroundColor: '#f1f5f9', borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
-              온라인 전담 직원이 실시간으로 확인 후 직접 답변을 드립니다.
-            </div>
-
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-}
+                    {t.bot.menu
