@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 
-// 다국어 표준 매크로 사전 (한국인 직원이 버튼 하나만 누르면 고객 언어로 자동 전송)
+// 다국어 표준 매크로 사전
 const MACRO_TEMPLATES = [
   {
     id: 'id_request',
@@ -67,9 +67,12 @@ const MACRO_TEMPLATES = [
 
 export default function AdminPage() {
   const [authRole, setAuthRole] = useState(null); // null | 'admin' | 'worker'
-  const [activeTab, setActiveTab] = useState('live_chat'); // 'live_chat' | 'services' | 'promotions' | 'stores' | 'orders'
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'live_chat' | 'services' | 'promotions' | 'stores' | 'orders'
   const [serviceCategory, setServiceCategory] = useState('all');
   const [loginForm, setLoginForm] = useState({ id: '', pw: '' });
+
+  // [신규] 전체 등록 고객 목록 (0000_0000_0001 관리번호 체계)
+  const [users, setUsers] = useState([]);
 
   // 1. 모든 서비스 상품 데이터 (CRUD 영구 보존)
   const [services, setServices] = useState([
@@ -96,21 +99,21 @@ export default function AdminPage() {
     { id: 'suwon', name: '바다 수원역점', address: '경기 수원시 팔달구 매산로' }
   ]);
 
-  // 4. 접수 내역
+  // 4. 주문/상담 접수 내역
   const [orders, setOrders] = useState([
     { id: 1, type: 'SIM', name: 'NGUYEN VAN A', phone: '010-9988-7766', detail: '데이터 무제한 30일 (천안 본점 픽업)', time: '10분 전' },
     { id: 2, type: 'INTERNET', name: 'ZHANG WEI', phone: '010-3322-1144', detail: 'KT 500M 인터넷+TV 상담 신청', time: '25분 전' },
     { id: 3, type: 'RENTAL', name: 'ALI MOHAMMAD', phone: '010-5544-2233', detail: '쿠쿠 정수기 렌탈 상담 접수', time: '1시간 전' }
   ]);
 
-  // 5. 실시간 1:1 고객 채팅 관리
+  // 5. 1:1 고객 실시간 채팅
   const [chatRooms, setChatRooms] = useState({});
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [staffReplyText, setStaffReplyText] = useState('');
-  const [macroTargetLang, setMacroTargetLang] = useState('vi'); // 'vi' | 'zh' | 'en' | 'ko'
+  const [macroTargetLang, setMacroTargetLang] = useState('vi');
   const prevMsgCountRef = useRef({});
 
-  // Web Audio API를 활용한 알림 차임벨 재생 (외부 mp3 불필요)
+  // 알림 차임벨 사운드
   const playNotificationSound = () => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -119,8 +122,8 @@ export default function AdminPage() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.15, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
       osc.connect(gain);
@@ -128,35 +131,38 @@ export default function AdminPage() {
       osc.start();
       osc.stop(ctx.currentTime + 0.4);
     } catch (e) {
-      console.warn('Audio play error', e);
+      console.warn(e);
     }
   };
 
-  // 대화방 동기화 및 새 메시지 도착 감지
-  const loadChatRooms = () => {
+  // 회원 목록 및 채팅방 동기화
+  const loadData = () => {
+    // 1. 회원 목록 동기화
     try {
-      const stored = localStorage.getItem('bada_live_chat_rooms');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        
-        // 새 메시지 수신 시 알림음 재생
-        let hasNewCustomerMsg = false;
-        Object.keys(parsed).forEach(key => {
-          const room = parsed[key];
-          const prevCount = prevMsgCountRef.current[key] || 0;
+      const storedUsers = localStorage.getItem('bada_user_db');
+      if (storedUsers) {
+        setUsers(JSON.parse(storedUsers));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 2. 채팅방 목록 동기화
+    try {
+      const storedChats = localStorage.getItem('bada_live_chat_rooms');
+      if (storedChats) {
+        const parsed = JSON.parse(storedChats);
+        let hasNewMsg = false;
+        Object.keys(parsed).forEach(k => {
+          const room = parsed[k];
+          const prevCount = prevMsgCountRef.current[k] || 0;
           if (room.messages && room.messages.length > prevCount) {
             const lastMsg = room.messages[room.messages.length - 1];
-            if (lastMsg && lastMsg.sender === 'customer') {
-              hasNewCustomerMsg = true;
-            }
-            prevMsgCountRef.current[key] = room.messages.length;
+            if (lastMsg && lastMsg.sender === 'customer') hasNewMsg = true;
+            prevMsgCountRef.current[k] = room.messages.length;
           }
         });
-
-        if (hasNewCustomerMsg) {
-          playNotificationSound();
-        }
-
+        if (hasNewMsg) playNotificationSound();
         setChatRooms(parsed);
         if (!selectedRoomId && Object.keys(parsed).length > 0) {
           setSelectedRoomId(Object.keys(parsed)[0]);
@@ -168,39 +174,23 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    loadChatRooms();
-    const handleStorage = () => loadChatRooms();
+    loadData();
+    const handleStorage = () => loadData();
     window.addEventListener('storage', handleStorage);
-    const interval = setInterval(loadChatRooms, 2000);
+    const interval = setInterval(loadData, 2000);
     return () => {
       window.removeEventListener('storage', handleStorage);
       clearInterval(interval);
     };
   }, [selectedRoomId]);
 
-  // 활성 룸 변경 시 해당 고객 언어로 퀵 매크로 언어 자동 전환
   useEffect(() => {
     if (selectedRoomId && chatRooms[selectedRoomId]) {
-      const customerLang = chatRooms[selectedRoomId].lang || 'vi';
-      setMacroTargetLang(customerLang);
+      setMacroTargetLang(chatRooms[selectedRoomId].lang || 'vi');
     }
   }, [selectedRoomId, chatRooms]);
 
-  // 직원 일반 메시지 전송
-  const handleSendStaffReply = (e) => {
-    if (e) e.preventDefault();
-    if (!staffReplyText.trim() || !selectedRoomId) return;
-    sendReplyMessage(staffReplyText.trim());
-    setStaffReplyText('');
-  };
-
-  // 다국어 1초 퀵 매크로 클릭 전송
-  const handleSendMacro = (macroItem) => {
-    if (!selectedRoomId) return;
-    const textToSend = macroItem.translations[macroTargetLang] || macroItem.translations.ko;
-    sendReplyMessage(textToSend);
-  };
-
+  // 직원 답장 전송
   const sendReplyMessage = (text) => {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const currentRoom = chatRooms[selectedRoomId];
@@ -225,6 +215,19 @@ export default function AdminPage() {
     setChatRooms(updatedRooms);
     localStorage.setItem('bada_live_chat_rooms', JSON.stringify(updatedRooms));
     prevMsgCountRef.current[selectedRoomId] = updatedMessages.length;
+  };
+
+  const handleSendStaffReply = (e) => {
+    if (e) e.preventDefault();
+    if (!staffReplyText.trim() || !selectedRoomId) return;
+    sendReplyMessage(staffReplyText.trim());
+    setStaffReplyText('');
+  };
+
+  const handleSendMacro = (macroItem) => {
+    if (!selectedRoomId) return;
+    const textToSend = macroItem.translations[macroTargetLang] || macroItem.translations.ko;
+    sendReplyMessage(textToSend);
   };
 
   // 모달 상태
@@ -354,7 +357,11 @@ export default function AdminPage() {
       </header>
 
       <main style={{ maxWidth: '1140px', margin: '28px auto', padding: '0 20px' }}>
+        {/* 상단 탭 네비게이션 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '22px', flexWrap: 'wrap' }}>
+          <button onClick={() => setActiveTab('users')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'users' ? '#0284c7' : '#ffffff', color: activeTab === 'users' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
+            👥 전체 고객 관리 ({users.length})
+          </button>
           <button onClick={() => setActiveTab('live_chat')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'live_chat' ? '#0284c7' : '#ffffff', color: activeTab === 'live_chat' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span>💬 1:1 고객 실시간 상담</span>
             <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', padding: '2px 6px', borderRadius: '10px' }}>{roomKeys.length}</span>
@@ -373,11 +380,50 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* 1:1 실시간 고객 상담 + 다국어 1초 퀵 매크로 탑재 */}
+        {/* [탭 1] 👥 전체 고객 관리 (아이디 볼드체 + 하단 0000_0000_0001 관리번호 작게 병기) */}
+        {activeTab === 'users' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록 회원 및 고객 관리 ({users.length}명)</h2>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>* 고객 화면에는 관리번호가 노출되지 않으며 관리자 화면에서만 조회됩니다.</span>
+            </div>
+            <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '12px 16px' }}>고객 아이디 & 관리번호</th>
+                    <th style={{ padding: '12px 16px' }}>여권상 실명</th>
+                    <th style={{ padding: '12px 16px' }}>연락처</th>
+                    <th style={{ padding: '12px 16px' }}>가입일</th>
+                    <th style={{ padding: '12px 16px' }}>회원 상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#0f172a' }}>{u.username}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace', marginTop: '2px' }}>{u.userCode}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontWeight: '600' }}>{u.name}</td>
+                      <td style={{ padding: '12px 16px', color: '#475569' }}>{u.phone}</td>
+                      <td style={{ padding: '12px 16px', color: '#94a3b8' }}>{u.createdAt}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ backgroundColor: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '4px' }}>
+                          정상 활동
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* [탭 2] 1:1 실시간 고객 상담 */}
         {activeTab === 'live_chat' && (
           <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', height: '650px', display: 'grid', gridTemplateColumns: '320px 1fr', overflow: 'hidden' }}>
-            
-            {/* 좌측: 고객 세션 리스트 & 국기 뱃지 */}
             <div style={{ borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
               <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', fontSize: '14px', color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>상담 고객 목록 ({roomKeys.length})</span>
@@ -397,16 +443,16 @@ export default function AdminPage() {
                       <div 
                         key={key} 
                         onClick={() => setSelectedRoomId(key)} 
-                        style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', backgroundColor: isSelected ? '#e0f2fe' : '#ffffff', cursor: 'pointer', transition: 'background-color 0.15s' }}
+                        style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', backgroundColor: isSelected ? '#e0f2fe' : '#ffffff', cursor: 'pointer' }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                           <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#0f172a' }}>{room.userName}</span>
                           <span style={{ fontSize: '10px', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>{langBadge}</span>
                         </div>
+                        {room.userCode && <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'monospace', marginBottom: '4px' }}>{room.userCode}</div>}
                         <div style={{ fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {room.lastMessage || '대화 시작'}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>{room.lastTime}</div>
                       </div>
                     );
                   })
@@ -414,87 +460,56 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* 우측: 대화창 및 다국어 1초 퀵 매크로 바 */}
             {activeRoom ? (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                
-                {/* 상단 고객 정보 */}
                 <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff' }}>
                   <div>
                     <span style={{ fontWeight: 'bold', fontSize: '15px' }}>{activeRoom.userName}</span>
+                    {activeRoom.userCode && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px', fontFamily: 'monospace' }}>[{activeRoom.userCode}]</span>}
                     <span style={{ marginLeft: '10px', fontSize: '11px', color: '#059669', fontWeight: 'bold', backgroundColor: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>
-                      접속 언어: {activeRoom.lang === 'zh' ? '🇨🇳 중국어 (zh)' : activeRoom.lang === 'vi' ? '🇻🇳 베트남어 (vi)' : activeRoom.lang === 'en' ? '🇺🇸 영어 (en)' : '🇰🇷 한국어 (ko)'}
+                      언어: {activeRoom.lang || 'ko'}
                     </span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    {authRole === 'admin' ? '🛡️ 관리자 응대 중' : '💼 직원 응대 중'}
                   </div>
                 </div>
 
-                {/* 대화 내용 스크롤 */}
                 <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f8fafc' }}>
                   {activeRoom.messages.map((m, idx) => (
                     <div key={idx} style={{ alignSelf: m.sender === 'staff' ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
                       <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px', textAlign: m.sender === 'staff' ? 'right' : 'left' }}>
                         {m.sender === 'staff' ? '💼 본인(직원 답장)' : activeRoom.userName} · {m.time}
                       </div>
-                      <div style={{ padding: '10px 14px', borderRadius: '12px', backgroundColor: m.sender === 'staff' ? '#0284c7' : '#ffffff', color: m.sender === 'staff' ? '#ffffff' : '#1e293b', border: m.sender === 'staff' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '13px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                      <div style={{ padding: '10px 14px', borderRadius: '12px', backgroundColor: m.sender === 'staff' ? '#0284c7' : '#ffffff', color: m.sender === 'staff' ? '#ffffff' : '#1e293b', border: m.sender === 'staff' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '13px' }}>
                         {m.text}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* ⚡ 다국어 1초 퀵 매크로 툴바 */}
                 <div style={{ backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '10px 16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1' }}>
                       ⚡ 다국어 1초 퀵 매크로 (클릭 시 자동 번역 전송)
                     </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>전송 언어:</span>
-                      <select 
-                        value={macroTargetLang} 
-                        onChange={(e) => setMacroTargetLang(e.target.value)} 
-                        style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        <option value="vi">🇻🇳 베트남어 (Tiếng Việt)</option>
-                        <option value="zh">🇨🇳 중국어 (中文)</option>
-                        <option value="en">🇺🇸 영어 (English)</option>
-                        <option value="ko">🇰🇷 한국어 (Korean)</option>
-                      </select>
-                    </div>
+                    <select value={macroTargetLang} onChange={(e) => setMacroTargetLang(e.target.value)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 'bold' }}>
+                      <option value="vi">🇻🇳 베트남어 (Tiếng Việt)</option>
+                      <option value="zh">🇨🇳 중국어 (中文)</option>
+                      <option value="en">🇺🇸 영어 (English)</option>
+                      <option value="ko">🇰🇷 한국어 (Korean)</option>
+                    </select>
                   </div>
-
                   <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
                     {MACRO_TEMPLATES.map(macro => (
-                      <button 
-                        key={macro.id} 
-                        type="button" 
-                        onClick={() => handleSendMacro(macro)} 
-                        style={{ padding: '6px 10px', whiteSpace: 'nowrap', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.1s' }}
-                        title={macro.translations[macroTargetLang]}
-                      >
+                      <button key={macro.id} type="button" onClick={() => handleSendMacro(macro)} style={{ padding: '6px 10px', whiteSpace: 'nowrap', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
                         {macro.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* 직원 직접 타이핑 입력 폼 */}
                 <form onSubmit={handleSendStaffReply} style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', backgroundColor: '#ffffff' }}>
-                  <input 
-                    type="text" 
-                    placeholder="고객에게 직접 전달할 메시지를 입력하세요..." 
-                    value={staffReplyText} 
-                    onChange={(e) => setStaffReplyText(e.target.value)} 
-                    style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} 
-                  />
-                  <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>
-                    답변 전송
-                  </button>
+                  <input type="text" placeholder="고객에게 직접 전달할 메시지를 입력하세요..." value={staffReplyText} onChange={(e) => setStaffReplyText(e.target.value)} style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
+                  <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>답변 전송</button>
                 </form>
-
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px' }}>
@@ -504,7 +519,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 서비스 상품 관리 (CRUD 100% 보존) */}
+        {/* [탭 3] 서비스 상품 관리 (CRUD 100% 보존) */}
         {activeTab === 'services' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -515,21 +530,13 @@ export default function AdminPage() {
                   { key: 'INTERNET', label: '🌐 인터넷+TV' },
                   { key: 'RENTAL', label: '💧 렌탈/가전' }
                 ].map(cat => (
-                  <button 
-                    key={cat.key} 
-                    onClick={() => setServiceCategory(cat.key)} 
-                    style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #cbd5e1', backgroundColor: serviceCategory === cat.key ? '#0f172a' : '#fff', color: serviceCategory === cat.key ? '#fff' : '#475569', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
+                  <button key={cat.key} onClick={() => setServiceCategory(cat.key)} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #cbd5e1', backgroundColor: serviceCategory === cat.key ? '#0f172a' : '#fff', color: serviceCategory === cat.key ? '#fff' : '#475569', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
                     {cat.label}
                   </button>
                 ))}
               </div>
-
               {authRole === 'admin' && (
-                <button 
-                  onClick={handleOpenAddService} 
-                  style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-                >
+                <button onClick={handleOpenAddService} style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
                   ➕ 새 상품/플랜 등록
                 </button>
               )}
@@ -553,7 +560,6 @@ export default function AdminPage() {
                   <div style={{ flex: 1, fontSize: '12px', color: '#475569', borderTop: '1px solid #f1f5f9', paddingTop: '10px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
                     {item.desc}
                   </div>
-
                   {authRole === 'admin' && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px' }}>
                       <button onClick={() => { setEditingService({ ...item }); setShowServiceModal(true); }} style={{ padding: '8px', backgroundColor: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>수정</button>
@@ -566,40 +572,22 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 프로모션 관리 */}
+        {/* [탭 4] 프로모션 관리 */}
         {activeTab === 'promotions' && (
           <div style={{ backgroundColor: '#fff', padding: '26px', borderRadius: '12px', border: '1px solid #e2e8f0', maxWidth: '640px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0' }}>📢 주요 프로모션 & 배너 텍스트 관리</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>한패스(HANPASS) 추천인 프로모션 코드</label>
-                <input 
-                  type="text" 
-                  value={promotions.hanpassCode} 
-                  disabled={authRole !== 'admin'}
-                  onChange={(e) => setPromotions({ ...promotions, hanpassCode: e.target.value })} 
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} 
-                />
+                <input type="text" value={promotions.hanpassCode} disabled={authRole !== 'admin'} onChange={(e) => setPromotions({ ...promotions, hanpassCode: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>한패스 혜택 요약 문구</label>
-                <input 
-                  type="text" 
-                  value={promotions.hanpassBenefit} 
-                  disabled={authRole !== 'admin'}
-                  onChange={(e) => setPromotions({ ...promotions, hanpassBenefit: e.target.value })} 
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} 
-                />
+                <input type="text" value={promotions.hanpassBenefit} disabled={authRole !== 'admin'} onChange={(e) => setPromotions({ ...promotions, hanpassBenefit: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569' }}>인터넷 결합 공지 배너 문구</label>
-                <textarea 
-                  rows={3} 
-                  value={promotions.internetNotice} 
-                  disabled={authRole !== 'admin'}
-                  onChange={(e) => setPromotions({ ...promotions, internetNotice: e.target.value })} 
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} 
-                />
+                <textarea rows={3} value={promotions.internetNotice} disabled={authRole !== 'admin'} onChange={(e) => setPromotions({ ...promotions, internetNotice: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} />
               </div>
               {authRole === 'admin' && (
                 <button onClick={() => alert('프로모션 및 배너 설정이 저장되었습니다.')} style={{ padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '8px' }}>
@@ -610,16 +598,13 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 매장 관리 */}
+        {/* [탭 5] 매장 관리 */}
         {activeTab === 'stores' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>등록된 픽업 매장/대리점</h2>
               {authRole === 'admin' && (
-                <button 
-                  onClick={() => { setEditingStore({ id: `store_${Date.now()}`, name: '', address: '' }); setShowStoreModal(true); }} 
-                  style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-                >
+                <button onClick={() => { setEditingStore({ id: `store_${Date.now()}`, name: '', address: '' }); setShowStoreModal(true); }} style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
                   ➕ 새 대리점 등록
                 </button>
               )}
@@ -641,7 +626,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 인입 접수 내역 */}
+        {/* [탭 6] 인입 접수 내역 */}
         {activeTab === 'orders' && (
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>실시간 접수 상담/주문 내역</h2>
@@ -677,7 +662,7 @@ export default function AdminPage() {
         )}
       </main>
 
-      {/* 상품 등록/수정 모달 */}
+      {/* 서비스 모달 */}
       {showServiceModal && editingService && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 100 }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto' }}>
