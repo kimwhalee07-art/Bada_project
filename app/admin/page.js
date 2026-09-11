@@ -1,5 +1,69 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// 다국어 표준 매크로 사전 (한국인 직원이 버튼 하나만 누르면 고객 언어로 자동 전송)
+const MACRO_TEMPLATES = [
+  {
+    id: 'id_request',
+    label: '📸 여권/등록증 사진 요청',
+    translations: {
+      ko: '개통 처리를 위해 여권 사진(또는 외국인등록증 앞뒷면)을 선명하게 찍어 보내주세요.',
+      en: 'Please send a clear photo of your Passport (or both sides of your ARC) for activation.',
+      zh: '办理开通需要，请发送一张清晰的护照照片（或外国人登录证正反面照片）。',
+      vi: 'Vui lòng gửi ảnh chụp rõ nét Hộ chiếu (hoặc 2 mặt Thẻ cư trú ARC) để nhân viên tiến hành kích hoạt SIM.'
+    }
+  },
+  {
+    id: 'fast_activation',
+    label: '⚡ 5분 즉시 개통 안내',
+    translations: {
+      ko: '서류 확인이 완료되었습니다! 5분 내로 즉시 개통 처리해 드리겠습니다. 잠시만 기다려 주세요.',
+      en: 'Documents verified! Your SIM will be activated within 5 minutes. Please wait a moment.',
+      zh: '材料已确认完毕！5分钟内将为您快速开通，请稍候。',
+      vi: 'Giấy tờ đã được xác nhận! SIM sẽ được kích hoạt ngay trong vòng 5 phút. Vui lòng đợi trong giây lát.'
+    }
+  },
+  {
+    id: 'cash_gift',
+    label: '🎁 인터넷 사은품 당일 입금',
+    translations: {
+      ko: '인터넷+TV 설치 완료 당일, 약속드린 법정 최대 현금 사은품을 고객님 계좌로 즉시 입금해 드립니다.',
+      en: 'On the day of Internet+TV installation, your cash gift will be deposited directly into your bank account.',
+      zh: '宽带+电视安装完成当天，承诺的最高现金补贴将立即转账至您的银行账户。',
+      vi: 'Vào ngày lắp đặt xong Internet+TV, toàn bộ tiền quà tặng tiền mặt sẽ được chuyển khoản trực tiếp vào tài khoản ngân hàng của bạn.'
+    }
+  },
+  {
+    id: 'hanpass_code',
+    label: '💸 한패스 송금코드 안내',
+    translations: {
+      ko: '한패스(HANPASS) 앱에서 추천인 프로모션 코드 [BADA2026]을 입력하시면 첫 송금 수수료 무료 쿠폰이 지급됩니다.',
+      en: 'Enter promo code [BADA2026] in the HANPASS app to receive a zero-fee coupon on your first transfer.',
+      zh: '在HANPASS汉游APP输入邀请码 [BADA2026]，首笔汇款立享免手续费优惠券。',
+      vi: 'Nhập mã giới thiệu [BADA2026] trên ứng dụng HANPASS để nhận coupon miễn phí 0 won cho lần chuyển tiền đầu tiên.'
+    }
+  },
+  {
+    id: 'store_visit',
+    label: '🏬 천안 본점 방문 안내',
+    translations: {
+      ko: '바다 천안 본점(천안역 동부광장 도보 3분)으로 실물 신분증(여권 또는 등록증)을 지참하여 방문해 주세요.',
+      en: 'Please visit BADA Cheonan Main Store (3 mins from Cheonan Station) with your physical Passport or ARC.',
+      zh: '请携带护照或登录证原件，前往BADA天安总店（天安站东广场步行3分钟）自提。',
+      vi: 'Vui lòng mang theo Hộ chiếu hoặc Thẻ ARC bản gốc đến trực tiếp BADA chi nhánh Cheonan (cách ga Cheonan 3 phút đi bộ).'
+    }
+  },
+  {
+    id: 'wait_moment',
+    label: '⏳ 잠시 확인 대기 요청',
+    translations: {
+      ko: '고객님의 문의 사항을 확인 중입니다. 잠시만 기다려 주시면 친절히 답변드리겠습니다.',
+      en: 'We are checking your request. Please hold on a moment and we will assist you shortly.',
+      zh: '正在为您核实相关信息，请稍候片刻，我们将尽快回复您。',
+      vi: 'Nhân viên đang tiến hành kiểm tra thông tin. Vui lòng đợi trong giây lát, chúng tôi sẽ hỗ trợ bạn ngay.'
+    }
+  }
+];
 
 export default function AdminPage() {
   const [authRole, setAuthRole] = useState(null); // null | 'admin' | 'worker'
@@ -7,7 +71,7 @@ export default function AdminPage() {
   const [serviceCategory, setServiceCategory] = useState('all');
   const [loginForm, setLoginForm] = useState({ id: '', pw: '' });
 
-  // 1. 모든 서비스 통합 데이터 (CRUD 영구 보존)
+  // 1. 모든 서비스 상품 데이터 (CRUD 영구 보존)
   const [services, setServices] = useState([
     { id: 1, category: 'SIM', title: '데이터 무제한 30일', provider: '알뜰폰 종합', price: '39,600', unit: '/월', badge: 'BEST', icon: '📶', sub: '데이터와 통화를 마음껏', desc: '무제한 데이터 (11GB + 일2GB 후 3Mbps)\n통화/문자 무제한\n여권/외국인등록증 모두 개통 가능' },
     { id: 2, category: 'SIM', title: '실속형 선불폰', provider: '선불 충전', price: '15,000', unit: '/부터', badge: '', icon: '📱', sub: '종량 충전형', desc: '필요한 만큼만 충전\n여권 개통 가능\n기본 요금 15,000원부터' },
@@ -18,7 +82,7 @@ export default function AdminPage() {
     { id: 7, category: 'RENTAL', title: '쿠쿠 슬림 정수기 (냉온정)', provider: 'CUCKOO', price: '19,900', unit: '/월', badge: '인기렌탈', icon: '💧', sub: '외국인 간편 심사 등록', desc: '외국인등록증 하나로 당일 접수\n초기 등록비/설치비 전액 면제\n4개월 주기 필터 무상 교체' }
   ]);
 
-  // 2. 글로벌 프로모션 설정 (전화 제거 및 온라인 안내 중심)
+  // 2. 글로벌 프로모션 설정
   const [promotions, setPromotions] = useState({
     hanpassCode: 'BADA2026',
     hanpassBenefit: '수수료 0원 쿠폰 + 우대 환율 100% 적용',
@@ -32,26 +96,68 @@ export default function AdminPage() {
     { id: 'suwon', name: '바다 수원역점', address: '경기 수원시 팔달구 매산로' }
   ]);
 
-  // 4. 기존 주문/신청 내역
+  // 4. 접수 내역
   const [orders, setOrders] = useState([
     { id: 1, type: 'SIM', name: 'NGUYEN VAN A', phone: '010-9988-7766', detail: '데이터 무제한 30일 (천안 본점 픽업)', time: '10분 전' },
     { id: 2, type: 'INTERNET', name: 'ZHANG WEI', phone: '010-3322-1144', detail: 'KT 500M 인터넷+TV 상담 신청', time: '25분 전' },
     { id: 3, type: 'RENTAL', name: 'ALI MOHAMMAD', phone: '010-5544-2233', detail: '쿠쿠 정수기 렌탈 상담 접수', time: '1시간 전' }
   ]);
 
-  // 5. 1:1 실시간 고객 채팅 관리 상태
+  // 5. 실시간 1:1 고객 채팅 관리
   const [chatRooms, setChatRooms] = useState({});
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [staffReplyText, setStaffReplyText] = useState('');
+  const [macroTargetLang, setMacroTargetLang] = useState('vi'); // 'vi' | 'zh' | 'en' | 'ko'
+  const prevMsgCountRef = useRef({});
 
-  // 브라우저 간 크로스 탭 실시간 동기화
+  // Web Audio API를 활용한 알림 차임벨 재생 (외부 mp3 불필요)
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) {
+      console.warn('Audio play error', e);
+    }
+  };
+
+  // 대화방 동기화 및 새 메시지 도착 감지
   const loadChatRooms = () => {
     try {
       const stored = localStorage.getItem('bada_live_chat_rooms');
       if (stored) {
         const parsed = JSON.parse(stored);
+        
+        // 새 메시지 수신 시 알림음 재생
+        let hasNewCustomerMsg = false;
+        Object.keys(parsed).forEach(key => {
+          const room = parsed[key];
+          const prevCount = prevMsgCountRef.current[key] || 0;
+          if (room.messages && room.messages.length > prevCount) {
+            const lastMsg = room.messages[room.messages.length - 1];
+            if (lastMsg && lastMsg.sender === 'customer') {
+              hasNewCustomerMsg = true;
+            }
+            prevMsgCountRef.current[key] = room.messages.length;
+          }
+        });
+
+        if (hasNewCustomerMsg) {
+          playNotificationSound();
+        }
+
         setChatRooms(parsed);
-        // 기본 선택 룸 세팅
         if (!selectedRoomId && Object.keys(parsed).length > 0) {
           setSelectedRoomId(Object.keys(parsed)[0]);
         }
@@ -65,25 +171,44 @@ export default function AdminPage() {
     loadChatRooms();
     const handleStorage = () => loadChatRooms();
     window.addEventListener('storage', handleStorage);
-    const interval = setInterval(loadChatRooms, 2000); // 주기적 갱신
+    const interval = setInterval(loadChatRooms, 2000);
     return () => {
       window.removeEventListener('storage', handleStorage);
       clearInterval(interval);
     };
   }, [selectedRoomId]);
 
-  // 직원/관리자가 고객에게 답장 전송
-  const handleSendStaffReply = (e) => {
-    e.preventDefault();
-    if (!staffReplyText.trim() || !selectedRoomId) return;
+  // 활성 룸 변경 시 해당 고객 언어로 퀵 매크로 언어 자동 전환
+  useEffect(() => {
+    if (selectedRoomId && chatRooms[selectedRoomId]) {
+      const customerLang = chatRooms[selectedRoomId].lang || 'vi';
+      setMacroTargetLang(customerLang);
+    }
+  }, [selectedRoomId, chatRooms]);
 
+  // 직원 일반 메시지 전송
+  const handleSendStaffReply = (e) => {
+    if (e) e.preventDefault();
+    if (!staffReplyText.trim() || !selectedRoomId) return;
+    sendReplyMessage(staffReplyText.trim());
+    setStaffReplyText('');
+  };
+
+  // 다국어 1초 퀵 매크로 클릭 전송
+  const handleSendMacro = (macroItem) => {
+    if (!selectedRoomId) return;
+    const textToSend = macroItem.translations[macroTargetLang] || macroItem.translations.ko;
+    sendReplyMessage(textToSend);
+  };
+
+  const sendReplyMessage = (text) => {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const currentRoom = chatRooms[selectedRoomId];
     if (!currentRoom) return;
 
     const updatedMessages = [
       ...currentRoom.messages,
-      { sender: 'staff', text: staffReplyText.trim(), time: timeStr }
+      { sender: 'staff', text: text, time: timeStr }
     ];
 
     const updatedRooms = {
@@ -91,7 +216,7 @@ export default function AdminPage() {
       [selectedRoomId]: {
         ...currentRoom,
         unreadCount: 0,
-        lastMessage: staffReplyText.trim(),
+        lastMessage: text,
         lastTime: timeStr,
         messages: updatedMessages
       }
@@ -99,7 +224,7 @@ export default function AdminPage() {
 
     setChatRooms(updatedRooms);
     localStorage.setItem('bada_live_chat_rooms', JSON.stringify(updatedRooms));
-    setStaffReplyText('');
+    prevMsgCountRef.current[selectedRoomId] = updatedMessages.length;
   };
 
   // 모달 상태
@@ -230,8 +355,9 @@ export default function AdminPage() {
 
       <main style={{ maxWidth: '1140px', margin: '28px auto', padding: '0 20px' }}>
         <div style={{ display: 'flex', gap: '10px', marginBottom: '22px', flexWrap: 'wrap' }}>
-          <button onClick={() => setActiveTab('live_chat')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'live_chat' ? '#0284c7' : '#ffffff', color: activeTab === 'live_chat' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', position: 'relative' }}>
-            💬 1:1 고객 실시간 상담 ({roomKeys.length})
+          <button onClick={() => setActiveTab('live_chat')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'live_chat' ? '#0284c7' : '#ffffff', color: activeTab === 'live_chat' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>💬 1:1 고객 실시간 상담</span>
+            <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', padding: '2px 6px', borderRadius: '10px' }}>{roomKeys.length}</span>
           </button>
           <button onClick={() => setActiveTab('services')} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: activeTab === 'services' ? '#0284c7' : '#ffffff', color: activeTab === 'services' ? '#fff' : '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
             📦 전체 서비스 상품 관리 ({services.length})
@@ -247,36 +373,40 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* 1:1 실시간 고객 채팅 상담 (직원/관리자가 직접 답변) */}
+        {/* 1:1 실시간 고객 상담 + 다국어 1초 퀵 매크로 탑재 */}
         {activeTab === 'live_chat' && (
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', height: '620px', display: 'grid', gridTemplateColumns: '320px 1fr', overflow: 'hidden' }}>
-            {/* 좌측: 고객 세션 리스트 */}
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', height: '650px', display: 'grid', gridTemplateColumns: '320px 1fr', overflow: 'hidden' }}>
+            
+            {/* 좌측: 고객 세션 리스트 & 국기 뱃지 */}
             <div style={{ borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
-              <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', fontSize: '14px', color: '#0f172a' }}>
-                상담 대기 고객 목록 ({roomKeys.length})
+              <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', fontSize: '14px', color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>상담 고객 목록 ({roomKeys.length})</span>
+                <span style={{ fontSize: '11px', color: '#059669' }}>● 실시간 동기화</span>
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {roomKeys.length === 0 ? (
-                  <div style={{ padding: '30px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                    현재 대기 중인 고객 대화가 없습니다.<br/>(메인 화면 챗봇에서 문의 시 즉시 나타납니다)
+                  <div style={{ padding: '40px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', lineHeight: '1.6' }}>
+                    대기 중인 고객이 없습니다.<br/>(메인 화면 1:1 채팅 시 즉시 표시됨)
                   </div>
                 ) : (
                   roomKeys.map(key => {
                     const room = chatRooms[key];
                     const isSelected = selectedRoomId === key;
+                    const langBadge = room.lang === 'zh' ? '🇨🇳 中文' : room.lang === 'vi' ? '🇻🇳 Tiếng Việt' : room.lang === 'en' ? '🇺🇸 English' : '🇰🇷 한국어';
                     return (
                       <div 
                         key={key} 
                         onClick={() => setSelectedRoomId(key)} 
-                        style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', backgroundColor: isSelected ? '#e0f2fe' : '#ffffff', cursor: 'pointer' }}
+                        style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', backgroundColor: isSelected ? '#e0f2fe' : '#ffffff', cursor: 'pointer', transition: 'background-color 0.15s' }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#0f172a' }}>{room.userName}</span>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>{room.lastTime}</span>
+                          <span style={{ fontSize: '10px', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>{langBadge}</span>
                         </div>
                         <div style={{ fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {room.lastMessage || '대화 시작'}
                         </div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>{room.lastTime}</div>
                       </div>
                     );
                   })
@@ -284,41 +414,87 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* 우측: 대화창 및 직원 답변 입력폼 */}
+            {/* 우측: 대화창 및 다국어 1초 퀵 매크로 바 */}
             {activeRoom ? (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff' }}>
+                
+                {/* 상단 고객 정보 */}
+                <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff' }}>
                   <div>
                     <span style={{ fontWeight: 'bold', fontSize: '15px' }}>{activeRoom.userName}</span>
-                    <span style={{ marginLeft: '10px', fontSize: '12px', color: '#059669', fontWeight: 'bold' }}>● 실시간 연결 중</span>
+                    <span style={{ marginLeft: '10px', fontSize: '11px', color: '#059669', fontWeight: 'bold', backgroundColor: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>
+                      접속 언어: {activeRoom.lang === 'zh' ? '🇨🇳 중국어 (zh)' : activeRoom.lang === 'vi' ? '🇻🇳 베트남어 (vi)' : activeRoom.lang === 'en' ? '🇺🇸 영어 (en)' : '🇰🇷 한국어 (ko)'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    {authRole === 'admin' ? '🛡️ 관리자 응대 중' : '💼 직원 응대 중'}
                   </div>
                 </div>
 
-                <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f8fafc' }}>
+                {/* 대화 내용 스크롤 */}
+                <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#f8fafc' }}>
                   {activeRoom.messages.map((m, idx) => (
                     <div key={idx} style={{ alignSelf: m.sender === 'staff' ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
                       <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px', textAlign: m.sender === 'staff' ? 'right' : 'left' }}>
-                        {m.sender === 'staff' ? '🛡️ 본인(직원 답변)' : activeRoom.userName} · {m.time}
+                        {m.sender === 'staff' ? '💼 본인(직원 답장)' : activeRoom.userName} · {m.time}
                       </div>
-                      <div style={{ padding: '10px 14px', borderRadius: '12px', backgroundColor: m.sender === 'staff' ? '#0284c7' : '#ffffff', color: m.sender === 'staff' ? '#ffffff' : '#1e293b', border: m.sender === 'staff' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '13px' }}>
+                      <div style={{ padding: '10px 14px', borderRadius: '12px', backgroundColor: m.sender === 'staff' ? '#0284c7' : '#ffffff', color: m.sender === 'staff' ? '#ffffff' : '#1e293b', border: m.sender === 'staff' ? 'none' : '1px solid #e2e8f0', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '13px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                         {m.text}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <form onSubmit={handleSendStaffReply} style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', backgroundColor: '#ffffff' }}>
+                {/* ⚡ 다국어 1초 퀵 매크로 툴바 */}
+                <div style={{ backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '10px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1' }}>
+                      ⚡ 다국어 1초 퀵 매크로 (클릭 시 자동 번역 전송)
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>전송 언어:</span>
+                      <select 
+                        value={macroTargetLang} 
+                        onChange={(e) => setMacroTargetLang(e.target.value)} 
+                        style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        <option value="vi">🇻🇳 베트남어 (Tiếng Việt)</option>
+                        <option value="zh">🇨🇳 중국어 (中文)</option>
+                        <option value="en">🇺🇸 영어 (English)</option>
+                        <option value="ko">🇰🇷 한국어 (Korean)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {MACRO_TEMPLATES.map(macro => (
+                      <button 
+                        key={macro.id} 
+                        type="button" 
+                        onClick={() => handleSendMacro(macro)} 
+                        style={{ padding: '6px 10px', whiteSpace: 'nowrap', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.1s' }}
+                        title={macro.translations[macroTargetLang]}
+                      >
+                        {macro.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 직원 직접 타이핑 입력 폼 */}
+                <form onSubmit={handleSendStaffReply} style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', backgroundColor: '#ffffff' }}>
                   <input 
                     type="text" 
-                    placeholder="고객에게 전송할 답변을 입력하세요..." 
+                    placeholder="고객에게 직접 전달할 메시지를 입력하세요..." 
                     value={staffReplyText} 
                     onChange={(e) => setStaffReplyText(e.target.value)} 
-                    style={{ flex: 1, padding: '11px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} 
+                    style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} 
                   />
-                  <button type="submit" style={{ padding: '11px 20px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>
+                  <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>
                     답변 전송
                   </button>
                 </form>
+
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px' }}>
@@ -501,7 +677,7 @@ export default function AdminPage() {
         )}
       </main>
 
-      {/* 서비스 등록/수정 모달 */}
+      {/* 상품 등록/수정 모달 */}
       {showServiceModal && editingService && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 100 }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto' }}>
