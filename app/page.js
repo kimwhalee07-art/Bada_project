@@ -1,6 +1,9 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 
+// 🔑 Google OAuth 클라이언트 ID 설정 (구글 클라우드 콘솔에서 발급받은 ID를 여기에 넣으시면 즉시 연동됩니다)
+const GOOGLE_CLIENT_ID = ''; // 예: '1234567890-abcdefg.apps.googleusercontent.com'
+
 // 다국어 사전 (ko, en, zh, vi)
 const translations = {
   ko: {
@@ -69,7 +72,7 @@ const translations = {
       { q: "Lắp internet có nhận tiền mặt không?", a: "Có, nhận 100% tiền mặt quà tặng ngay trong ngày lắp đặt!" },
       { q: "Cách nhận ưu đãi phí chuyển tiền?", a: "Nhập mã khuyến mãi BADA2026 khi đăng ký để nhận phiếu miễn phí lần đầu." }
     ],
-    bot: { title: 'Trung Tâm Hỗ Trợ BADA', sub: 'Giải Đáp Nhanh & Trực Tiếp', welcome: 'Xin chào! Hãy chọn chủ đề hoặc trò chuyện trực tiếp với nhân viên.', staff: '💬 Trò chuyện 1:1 với nhân viên', back: '↩ Quay lại câu hỏi', send: 'Gửi', ph: 'Nhập câu hỏi...' }
+    bot: { title: 'Trung Tâm Hỗ Trợ BADA', sub: 'Giải Đáp Nhanh & Trực Tiếp', welcome: 'Xin chào! Hãy chọn chủ đề 또는 trò chuyện trực tiếp với nhân viên.', staff: '💬 Trò chuyện 1:1 với nhân viên', back: '↩ Quay lại câu hỏi', send: 'Gửi', ph: 'Nhập câu hỏi...' }
   }
 };
 
@@ -135,7 +138,7 @@ export default function BadaPage() {
     { id: 6, telecomCategory: 'mno', carrier: 'LG U+ (통신 3사)', name: '데이터 라이트 5G', price: '47,000', unit: '/월', badge: 'U+ 결합', tagColor: '#db2777', desc: 'LG 정규 5G 데이터 회선\n외국인 명의 개통 지원\nU+ 인터넷 결합 할인 지원' }
   ];
 
-  // 세션 ID 및 계정 DB 로드
+  // 세션 ID 및 계정 DB 로드 & 구글 OAuth 리다이렉트 처리
   useEffect(() => {
     let sid = localStorage.getItem('bada_chat_session_id');
     if (!sid) {
@@ -159,7 +162,51 @@ export default function BadaPage() {
     } else {
       localStorage.setItem('bada_user_db', JSON.stringify(registeredUsers));
     }
+
+    // 구글 로그인 성공 후 리다이렉트 토큰 자동 감지 (Client ID 등록 시 자동 활성화)
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const token = params.get('access_token');
+      if (token) {
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(profile => {
+            if (profile && profile.email) {
+              const googleUser = {
+                userCode: `G_${profile.sub ? profile.sub.slice(-6) : Date.now().toString().slice(-6)}`,
+                username: profile.email.split('@')[0],
+                name: profile.name || profile.email.split('@')[0],
+                email: profile.email
+              };
+              setCurrentUser(googleUser);
+              localStorage.setItem('bada_current_login', JSON.stringify(googleUser));
+              setApplyForm(p => ({ ...p, name: googleUser.name, email: googleUser.email }));
+              window.history.replaceState(null, null, ' ');
+              alert(`🎉 구글 계정으로 로그인되었습니다! 반갑습니다, ${googleUser.name}님.`);
+            }
+          })
+          .catch(() => {});
+      }
+    }
   }, []);
+
+  // 구글 로그인 버튼 클릭 핸들러
+  const handleGoogleLogin = () => {
+    if (!GOOGLE_CLIENT_ID) {
+      alert('⚠️ 구글 간편 로그인은 아직 준비 중입니다.\n\n(구글 클라우드 콘솔에서 클라이언트 ID 발급 후 연동될 예정입니다. 지금은 아래의 일반 로그인/회원가입을 이용해 주세요!)');
+      return;
+    }
+
+    try {
+      const redirectUri = typeof window !== 'undefined' ? window.location.origin : '';
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=email%20profile`;
+      window.location.href = authUrl;
+    } catch (err) {
+      console.error('Google Auth Error:', err);
+    }
+  };
 
   // 채팅 내역 동기화
   useEffect(() => {
@@ -827,16 +874,57 @@ export default function BadaPage() {
         </div>
       )}
 
-      {/* 12. 회원 로그인 / 회원가입 모달 */}
+      {/* 12. 회원 로그인 / 회원가입 모달 (상단 구글 간편시작 + 기존 아이디/비번 유지) */}
       {showLoginModal && (
         <div className="modal-bg">
           <div className="modal-box" style={{ maxWidth: '380px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={() => setAuthTab('login')} style={{ border: 'none', background: 'none', fontSize: '16px', fontWeight: authTab === 'login' ? 'bold' : 'normal', color: authTab === 'login' ? '#0284c7' : '#94a3b8', cursor: 'pointer', borderBottom: authTab === 'login' ? '2px solid #0284c7' : 'none', paddingBottom: '4px' }}>로그인</button>
-                <button type="button" onClick={() => setAuthTab('register')} style={{ border: 'none', background: 'none', fontSize: '16px', fontWeight: authTab === 'register' ? 'bold' : 'normal', color: authTab === 'register' ? '#0284c7' : '#94a3b8', cursor: 'pointer', borderBottom: authTab === 'register' ? '2px solid #0284c7' : 'none', paddingBottom: '4px' }}>회원가입</button>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 'bold', color: '#0f172a' }}>BADA 회원 서비스</h3>
               <button onClick={() => setShowLoginModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+            </div>
+
+            {/* [신규] 상단 구글로 간편시작 버튼 */}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                padding: '11px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                color: '#1f2937',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              {/* Google 4색 'G' 로고 */}
+              <svg width="18" height="18" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Google 계정으로 간편 시작</span>
+            </button>
+
+            {/* 구분선 */}
+            <div style={{ display: 'flex', alignItems: 'center', margin: '16px 0 14px 0' }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }}></div>
+              <span style={{ padding: '0 10px', fontSize: '11px', color: '#94a3b8', fontWeight: 'bold' }}>또는 일반 계정으로 이용</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }}></div>
+            </div>
+
+            {/* 기존 로그인 / 회원가입 탭 & 폼 그대로 유지 */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+              <button type="button" onClick={() => setAuthTab('login')} style={{ border: 'none', background: 'none', fontSize: '15px', fontWeight: authTab === 'login' ? 'bold' : 'normal', color: authTab === 'login' ? '#0284c7' : '#94a3b8', cursor: 'pointer', borderBottom: authTab === 'login' ? '2px solid #0284c7' : 'none', paddingBottom: '4px' }}>로그인</button>
+              <button type="button" onClick={() => setAuthTab('register')} style={{ border: 'none', background: 'none', fontSize: '15px', fontWeight: authTab === 'register' ? 'bold' : 'normal', color: authTab === 'register' ? '#0284c7' : '#94a3b8', cursor: 'pointer', borderBottom: authTab === 'register' ? '2px solid #0284c7' : 'none', paddingBottom: '4px' }}>회원가입</button>
             </div>
 
             {authTab === 'login' ? (
