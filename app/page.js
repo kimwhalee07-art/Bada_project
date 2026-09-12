@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 
 const translations = {
   ko: {
-    nav: { plans: '유심 요금제', internet: '🌐 인터넷 설치 (사은품)', rental: '💧 가전/렌탈', hanpass: '💸 해외송금 (한패스)', stores: '수령매장', faq: 'FAQ', login: '로그인', apply: '신청하기', logout: '로그아웃' },
+    nav: { plans: '유심 요금제', internet: '인터넷·TV', rental: '가전 렌탈', hanpass: '해외송금', stores: '수령 매장', faq: 'FAQ', login: '로그인', apply: '신청하기', logout: '로그아웃' },
     hero: {
       badge: '⚡ 외국인을 위한 한국 생활 원스톱 통신 & 금융',
       title1: '선불유심부터',
@@ -90,7 +90,7 @@ const translations = {
     }
   },
   en: {
-    nav: { plans: 'SIM Plans', internet: '🌐 High-speed Internet', rental: '💧 Appliance Rental', hanpass: '💸 Remittance (Hanpass)', stores: 'Stores', faq: 'FAQ', login: 'Login', apply: 'Apply Now', logout: 'Logout' },
+    nav: { plans: 'SIM Plans', internet: 'Internet & TV', rental: 'Appliance Rental', hanpass: 'Remittance', stores: 'Stores', faq: 'FAQ', login: 'Login', apply: 'Apply Now', logout: 'Logout' },
     hero: {
       badge: '⚡ One-stop Telecom & Finance for Foreigners in Korea',
       title1: 'From Prepaid SIM to',
@@ -177,7 +177,7 @@ const translations = {
     }
   },
   zh: {
-    nav: { plans: '电话卡套餐', internet: '🌐 宽带安装 (现金补贴)', rental: '💧 家电租赁', hanpass: '💸 跨境汇款 (Hanpass)', stores: '自提门店', faq: '常见问题', login: '登录', apply: '立即申请', logout: '退出登录' },
+    nav: { plans: '电话卡套餐', internet: '宽带·电视', rental: '家电租赁', hanpass: '跨境汇款', stores: '自提门店', faq: '常见问题', login: '登录', apply: '立即申请', logout: '退出登录' },
     hero: {
       badge: '⚡ 专为在韩外国人打造的一站式通信与金融服务',
       title1: '从预付费电话卡到',
@@ -264,7 +264,7 @@ const translations = {
     }
   },
   vi: {
-    nav: { plans: 'Gói Cước SIM', internet: '🌐 Lắp Mạng Internet', rental: '💧 Thuê Thiết Bị Gia Dụng', hanpass: '💸 Chuyển Tiền Quốc Tế', stores: 'Cửa Hàng', faq: 'FAQ', login: 'Đăng nhập', apply: 'Đăng Ký Ngay', logout: 'Đăng xuất' },
+    nav: { plans: 'Gói Cước SIM', internet: 'Internet & TV', rental: 'Thuê Thiết Bị', hanpass: 'Chuyển Tiền', stores: 'Cửa Hàng', faq: 'FAQ', login: 'Đăng nhập', apply: 'Đăng Ký', logout: 'Đăng xuất' },
     hero: {
       badge: '⚡ Dịch vụ Viễn thông & Tài chính Trọn gói cho Người nước ngoài tại Hàn Quốc',
       title1: 'Từ SIM Trả Trước đến',
@@ -870,30 +870,34 @@ export default function BadaPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* 상단 네비게이션 */}
-      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 40, padding: '0 20px' }}>
-        <div style={{ maxWidth: '1140px', margin: '0 auto', height: '68px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* 상단 네비게이션 (절대 2줄 줄바꿈 방지 & 1줄 고정) */}
+      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 40, padding: '0 24px' }}>
+        <div style={{ maxWidth: '1320px', margin: '0 auto', height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+          
+          {/* 좌측 로고 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <div style={{ width: '38px', height: '38px', backgroundColor: '#0284c7', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: '900', fontSize: '20px' }}>
               B
             </div>
             <div>
-              <div style={{ fontSize: '18px', fontWeight: '800', color: '#0284c7', letterSpacing: '-0.5px' }}>BADA</div>
-              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '-2px' }}>FOREIGNER ONE-STOP</div>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#0284c7', letterSpacing: '-0.5px', lineHeight: '1.1' }}>BADA</div>
+              <div style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap' }}>FOREIGNER ONE-STOP</div>
             </div>
           </div>
 
-          <nav style={{ display: 'flex', gap: '20px', fontSize: '14px', fontWeight: '600' }}>
-            <a href="#plans" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.plans}</a>
-            <a href="#internet" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.internet}</a>
-            <a href="#rental" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.rental}</a>
-            <a href="#hanpass" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.hanpass}</a>
-            <a href="#delivery" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.stores}</a>
-            <a href="#faq" style={{ color: '#334155', textDecoration: 'none' }}>{t.nav.faq}</a>
+          {/* 중앙 네비게이션 메뉴 (whiteSpace: 'nowrap' & flexShrink: 0 고정) */}
+          <nav style={{ display: 'flex', gap: '24px', fontSize: '14px', fontWeight: '700', alignItems: 'center', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <a href="#plans" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.plans}</a>
+            <a href="#internet" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.internet}</a>
+            <a href="#rental" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.rental}</a>
+            <a href="#hanpass" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.hanpass}</a>
+            <a href="#delivery" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.stores}</a>
+            <a href="#faq" style={{ color: '#334155', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t.nav.faq}</a>
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
+          {/* 우측 언어팩 & 로그인/신청 (whiteSpace: 'nowrap' & flexShrink: 0 고정) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', gap: '3px', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '8px', flexShrink: 0 }}>
               {[
                 { code: 'ko', label: '한국어' },
                 { code: 'en', label: 'ENG' },
@@ -904,14 +908,16 @@ export default function BadaPage() {
                   key={item.code}
                   onClick={() => setLang(item.code)}
                   style={{
-                    padding: '5px 9px',
+                    padding: '5px 10px',
                     fontSize: '12px',
                     borderRadius: '6px',
                     border: 'none',
                     backgroundColor: lang === item.code ? '#ffffff' : 'transparent',
                     color: lang === item.code ? '#0284c7' : '#64748b',
                     fontWeight: lang === item.code ? 'bold' : 'normal',
-                    cursor: 'pointer'
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    boxShadow: lang === item.code ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
                   }}
                 >
                   {item.label}
@@ -922,7 +928,7 @@ export default function BadaPage() {
             {currentUser ? (
               <button
                 onClick={() => setShowUserMenuModal(true)}
-                style={{ backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}
               >
                 <span>👤 {currentUser.username} 님</span>
                 <span style={{ fontSize: '10px', color: '#16a34a' }}>▾</span>
@@ -930,7 +936,7 @@ export default function BadaPage() {
             ) : (
               <button
                 onClick={() => { setAuthTab('login'); setShowLoginModal(true); }}
-                style={{ backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                style={{ backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
               >
                 👤 {t.nav.login}
               </button>
@@ -941,7 +947,7 @@ export default function BadaPage() {
                 setForm(prev => ({ ...prev, telecomCategory: 'mvno', carrier: 'KT망 알뜰폰', plan: '데이터 무제한 30일 (KT망)' }));
                 setShowApplyModal(true);
               }}
-              style={{ backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+              style={{ backgroundColor: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               {t.nav.apply}
             </button>
@@ -1142,7 +1148,7 @@ export default function BadaPage() {
               {t.internetSec.btnApply}
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))\', gap: '20px' }}>
             {internetPlans.map((item) => (
               <div key={item.id} style={{ backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
