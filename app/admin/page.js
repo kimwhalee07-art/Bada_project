@@ -33,6 +33,7 @@ const DEFAULT_SERVICES = [
 ];
 
 export default function AdminPage() {
+  const [mounted, setMounted] = useState(false);
   const [authRole, setAuthRole] = useState(null); // null | 'admin' | 'worker'
   const [currentStaff, setCurrentStaff] = useState(null);
   const [activeTab, setActiveTab] = useState('orders');
@@ -98,6 +99,22 @@ export default function AdminPage() {
       osc.stop(ctx.currentTime + 0.4);
     } catch (e) {}
   };
+
+  // 마운트 시 자동 로그인 세션 복원
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const savedSession = localStorage.getItem('bada_admin_session');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && (parsed.authRole === 'admin' || parsed.authRole === 'worker')) {
+          setAuthRole(parsed.authRole);
+          setCurrentStaff(parsed.currentStaff || null);
+          if (parsed.authRole === 'worker') setActiveTab('live_chat');
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   // 데이터 동기화 및 1:1 자동 균등 배정 (Least-Connections)
   const loadData = () => {
@@ -167,17 +184,18 @@ export default function AdminPage() {
     return () => { clearInterval(timer); window.removeEventListener('storage', loadData); };
   }, [authRole, currentStaff]);
 
-  // 로그인 인증
+  // 로그인 인증 & 세션 저장
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     const id = loginForm.id.trim();
     const pw = loginForm.pw.trim();
 
     if (id === 'admin' && pw === '1234') {
+      const staffInfo = { id: 'admin', name: '총괄 관리자 (대표)', dept: '본사 총괄' };
       setAuthRole('admin');
-      setCurrentStaff({ id: 'admin', name: '총괄 관리자 (대표)', dept: '본사 총괄' });
+      setCurrentStaff(staffInfo);
       setActiveTab('orders');
-      alert('👑 총괄 관리자로 로그인되었습니다.\n전체 권한 및 [직원 관리 & 대화 모니터링] 탭이 활성화됩니다.');
+      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'admin', currentStaff: staffInfo }));
       return;
     }
 
@@ -189,7 +207,7 @@ export default function AdminPage() {
       setAuthRole('worker');
       setCurrentStaff(fallback);
       setActiveTab('live_chat');
-      alert(`💼 직원(${fallback.name})으로 로그인되었습니다.\n자신에게 1:1 배정된 고객만 표시됩니다.`);
+      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'worker', currentStaff: fallback }));
       return;
     }
 
@@ -197,11 +215,19 @@ export default function AdminPage() {
       setAuthRole('worker');
       setCurrentStaff(matched);
       setActiveTab('live_chat');
-      alert(`💼 직원(${matched.name})으로 로그인되었습니다.\n자신에게 1:1 배정된 고객만 표시됩니다.`);
+      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'worker', currentStaff: matched }));
       return;
     }
 
-    alert('아이디 또는 비밀번호가 올바르지 않습니다.\n(총괄: admin / 1234, 직원: worker1 / 1234)');
+    alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+  };
+
+  // 로그아웃 (세션 삭제)
+  const handleLogout = () => {
+    localStorage.removeItem('bada_admin_session');
+    setAuthRole(null);
+    setCurrentStaff(null);
+    setLoginForm({ id: '', pw: '' });
   };
 
   // 신규 직원 등록
@@ -375,7 +401,12 @@ export default function AdminPage() {
   const monitoredRoom = chatRooms[monitorRoomId];
   const activeMonitoredStaff = staffList.find(s => s.id === monitorStaffId);
 
-  // 미인증 로그인 화면
+  // 초기 마운트 전 깜빡임 방지
+  if (!mounted) {
+    return <div style={{ minHeight: '100vh', backgroundColor: '#0f172a' }} />;
+  }
+
+  // 미인증 로그인 화면 (아이디/비번 힌트 완전히 제거)
   if (!authRole) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', padding: '20px', fontFamily: 'system-ui, sans-serif' }}>
@@ -390,20 +421,14 @@ export default function AdminPage() {
           <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>아이디</label>
-              <input type="text" value={loginForm.id} onChange={(e) => setLoginForm({ ...loginForm, id: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} placeholder="admin 또는 worker1" required />
+              <input type="text" value={loginForm.id} onChange={(e) => setLoginForm({ ...loginForm, id: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} placeholder="아이디를 입력하세요" required />
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>비밀번호</label>
-              <input type="password" value={loginForm.pw} onChange={(e) => setLoginForm({ ...loginForm, pw: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} placeholder="기본: 1234" required />
+              <input type="password" value={loginForm.pw} onChange={(e) => setLoginForm({ ...loginForm, pw: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} placeholder="비밀번호를 입력하세요" required />
             </div>
             <button type="submit" style={{ padding: '13px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>로그인</button>
           </form>
-          <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px', fontSize: '11px', color: '#64748b', lineHeight: '1.6' }}>
-            <strong>💡 계정 안내:</strong><br />
-            • <strong>총괄관리자:</strong> <code style={{ color: '#0284c7' }}>admin</code> / <code style={{ color: '#0284c7' }}>1234</code> (직원 관리 & 대화 모니터링 탭 열람)<br />
-            • <strong>상담 직원 1:</strong> <code style={{ color: '#0284c7' }}>worker1</code> / <code style={{ color: '#0284c7' }}>1234</code> (김상담 전담 배정)<br />
-            • <strong>상담 직원 2:</strong> <code style={{ color: '#0284c7' }}>worker2</code> / <code style={{ color: '#0284c7' }}>1234</code> (박민우 전담 배정)
-          </div>
         </div>
       </div>
     );
@@ -435,7 +460,7 @@ export default function AdminPage() {
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => window.open('/', '_blank')} className="btn btn-sec">🌐 고객용 사이트 ↗</button>
-          <button onClick={() => { setAuthRole(null); setCurrentStaff(null); }} className="btn" style={{ backgroundColor: '#fee2e2', color: '#b91c1c' }}>로그아웃</button>
+          <button onClick={handleLogout} className="btn" style={{ backgroundColor: '#fee2e2', color: '#b91c1c' }}>로그아웃</button>
         </div>
       </header>
 
@@ -911,7 +936,7 @@ export default function AdminPage() {
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 12px 0' }}>👥 신규 상담 직원 등록</h3>
             <form onSubmit={handleSaveNewStaff} style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>아이디 (ID)</label><input type="text" placeholder="예: worker4" value={editingStaff.id} onChange={e => setEditingStaff({ ...editingStaff, id: e.target.value })} className="inp" required /></div>
-              <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>비밀번호 (기본: 1234)</label><input type="password" value={editingStaff.pw} onChange={e => setEditingStaff({ ...editingStaff, pw: e.target.value })} className="inp" required /></div>
+              <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>비밀번호</label><input type="password" placeholder="비밀번호 설정" value={editingStaff.pw} onChange={e => setEditingStaff({ ...editingStaff, pw: e.target.value })} className="inp" required /></div>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>직원 성함 / 직급</label><input type="text" placeholder="예: 최지원 대리" value={editingStaff.name} onChange={e => setEditingStaff({ ...editingStaff, name: e.target.value })} className="inp" required /></div>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>부서 / 전담 언어</label><input type="text" placeholder="예: 상담 4팀 (베트남 전담)" value={editingStaff.dept} onChange={e => setEditingStaff({ ...editingStaff, dept: e.target.value })} className="inp" /></div>
               <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
