@@ -80,7 +80,8 @@ export default function BadaPage() {
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [regForm, setRegForm] = useState({ username: '', password: '', name: '', email: '' });
   const [registeredUsers, setRegisteredUsers] = useState([
-    { userCode: '0000_0000_0001', username: 'mimimimi', name: '외국인 고객', email: 'test@badahub.co.kr', password: '123', phone: '010-9988-7766', address: '충남 천안시 동남구 대흥로 123', bankName: '국민은행', bankAccount: '123-456-789012', bankHolder: '외국인 고객' }
+    // 데모용 샘플 고객 (실제 고객 정보 아님 · 비밀번호는 코드에 두지 않는다)
+    { userCode: '0000_0000_0001', username: 'mimimimi', name: '외국인 고객', email: 'test@badahub.co.kr', phone: '010-9988-7766', address: '충남 천안시 동남구 대흥로 123', bankName: '국민은행', bankAccount: '123-456-789012', bankHolder: '외국인 고객' }
   ]);
 
   // 마이페이지 폼 상태

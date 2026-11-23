@@ -11,11 +11,12 @@ const MACROS = [
   { id: 'wait', label: '⏳ 확인 대기 요청', t: { ko: '고객님의 문의 사항을 확인 중입니다. 잠시만 기다려 주세요.', en: 'Checking your request. Please hold on a moment.', zh: '正在核实信息，请稍候片刻。', vi: 'Đang kiểm tra thông tin, vui lòng đợi trong giây lát.' } }
 ];
 
-// 기본 직원 계정 DB
+// 기본 상담 직원 명단 (대화 배정/모니터링용 · 비밀번호는 저장하지 않음)
+// 실제 로그인 검증은 서버 API(/api/admin/auth)에서 환경변수로만 처리한다.
 const DEFAULT_STAFF = [
-  { id: 'worker1', pw: '1234', name: '김상담 주임', dept: '상담 1팀 (베트남 전담)' },
-  { id: 'worker2', pw: '1234', name: '박민우 대리', dept: '상담 2팀 (중국/영어 전담)' },
-  { id: 'worker3', pw: '1234', name: '이수진 사원', dept: '상담 3팀 (통신3사/인터넷)' }
+  { id: 'worker1', name: '김상담 주임', dept: '상담 1팀 (베트남 전담)' },
+  { id: 'worker2', name: '박민우 대리', dept: '상담 2팀 (중국/영어 전담)' },
+  { id: 'worker3', name: '이수진 사원', dept: '상담 3팀 (통신3사/인터넷)' }
 ];
 
 // 기본 상품 목록 (알뜰폰 / 통신 3사 / 인터넷 / 렌탈)
@@ -38,11 +39,13 @@ export default function AdminPage() {
   const [currentStaff, setCurrentStaff] = useState(null);
   const [activeTab, setActiveTab] = useState('orders');
   const [loginForm, setLoginForm] = useState({ id: '', pw: '' });
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // 직원 관리 & 모니터링
   const [staffList, setStaffList] = useState([]);
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const [editingStaff, setEditingStaff] = useState({ id: '', pw: '', name: '', dept: '' });
+  const [editingStaff, setEditingStaff] = useState({ id: '', name: '', dept: '' });
   const [monitorStaffId, setMonitorStaffId] = useState(null);
   const [monitorRoomId, setMonitorRoomId] = useState(null);
   const [reassignTargetStaffId, setReassignTargetStaffId] = useState('');
@@ -185,41 +188,63 @@ export default function AdminPage() {
   }, [authRole, currentStaff]);
 
   // 로그인 인증 & 세션 저장
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
+  // 비밀번호 검증은 서버 API(/api/admin/auth)에서만 하고, 클라이언트에는 비밀번호를 저장하지 않는다.
+  const handleLoginSubmit = async (e) => {
+    if (e) e.preventDefault();
     const id = loginForm.id.trim();
     const pw = loginForm.pw.trim();
+    if (!id || !pw) return;
 
-    if (id === 'admin' && pw === '1234') {
-      const staffInfo = { id: 'admin', name: '총괄 관리자 (대표)', dept: '본사 총괄' };
-      setAuthRole('admin');
-      setCurrentStaff(staffInfo);
-      setActiveTab('orders');
-      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'admin', currentStaff: staffInfo }));
-      return;
+    setLoginBusy(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, pw })
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success && (data.role === 'admin' || data.role === 'worker')) {
+        const role = data.role;
+        const staffInfo = data.staff || {
+          id,
+          name: role === 'admin' ? '총괄 관리자 (대표)' : id,
+          dept: role === 'admin' ? '본사 총괄' : '고객 상담팀'
+        };
+        setAuthRole(role);
+        setCurrentStaff(staffInfo);
+        setLoginForm({ id: '', pw: '' });
+        if (role === 'admin') {
+          setActiveTab('orders');
+        } else {
+          setActiveTab('live_chat');
+          // 상담 배정 명단에 없는 계정이면 명단에 추가 (비밀번호는 저장하지 않음)
+          try {
+            const staffDb = JSON.parse(localStorage.getItem('bada_staff_db') || JSON.stringify(DEFAULT_STAFF));
+            if (!staffDb.some(s => s.id === staffInfo.id)) {
+              const updated = [...staffDb, { id: staffInfo.id, name: staffInfo.name, dept: staffInfo.dept }];
+              setStaffList(updated);
+              localStorage.setItem('bada_staff_db', JSON.stringify(updated));
+            }
+          } catch (err) {}
+        }
+        localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: role, currentStaff: staffInfo }));
+        return;
+      }
+
+      if (res.status === 503 || data.disabled) {
+        setLoginError('관리자 로그인이 비활성화되어 있습니다. 서버에 ADMIN_PASSWORD 환경변수를 설정한 뒤 이용해 주세요.');
+      } else if (res.status === 429) {
+        setLoginError(data.error || '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+      } else {
+        setLoginError(data.error || '아이디 또는 비밀번호가 올바르지 않습니다.');
+      }
+    } catch (err) {
+      setLoginError('서버에 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.');
+    } finally {
+      setLoginBusy(false);
     }
-
-    const staffDb = JSON.parse(localStorage.getItem('bada_staff_db') || JSON.stringify(DEFAULT_STAFF));
-    const matched = staffDb.find(s => s.id === id && s.pw === pw);
-
-    if (!matched && id === 'worker' && pw === '1234') {
-      const fallback = staffDb[0] || { id: 'worker1', name: '현장 상담 직원', dept: '상담 1팀' };
-      setAuthRole('worker');
-      setCurrentStaff(fallback);
-      setActiveTab('live_chat');
-      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'worker', currentStaff: fallback }));
-      return;
-    }
-
-    if (matched) {
-      setAuthRole('worker');
-      setCurrentStaff(matched);
-      setActiveTab('live_chat');
-      localStorage.setItem('bada_admin_session', JSON.stringify({ authRole: 'worker', currentStaff: matched }));
-      return;
-    }
-
-    alert('아이디 또는 비밀번호가 올바르지 않습니다.');
   };
 
   // 로그아웃 (세션 삭제)
@@ -228,13 +253,14 @@ export default function AdminPage() {
     setAuthRole(null);
     setCurrentStaff(null);
     setLoginForm({ id: '', pw: '' });
+    setLoginError('');
   };
 
   // 신규 직원 등록
   const handleSaveNewStaff = (e) => {
     e.preventDefault();
-    if (!editingStaff.id || !editingStaff.pw || !editingStaff.name) {
-      alert('아이디, 비밀번호, 성함을 모두 입력하세요.');
+    if (!editingStaff.id || !editingStaff.name) {
+      alert('아이디와 성함을 모두 입력하세요.');
       return;
     }
     const staffDb = JSON.parse(localStorage.getItem('bada_staff_db') || JSON.stringify(DEFAULT_STAFF));
@@ -242,13 +268,13 @@ export default function AdminPage() {
       alert('이미 존재하는 직원 아이디입니다.');
       return;
     }
-    const item = { id: editingStaff.id.trim(), pw: editingStaff.pw.trim(), name: editingStaff.name.trim(), dept: editingStaff.dept.trim() || '고객 상담팀' };
+    const item = { id: editingStaff.id.trim(), name: editingStaff.name.trim(), dept: editingStaff.dept.trim() || '고객 상담팀' };
     const updated = [...staffDb, item];
     setStaffList(updated);
     localStorage.setItem('bada_staff_db', JSON.stringify(updated));
     setShowStaffModal(false);
-    setEditingStaff({ id: '', pw: '', name: '', dept: '' });
-    alert(`신규 직원 [${item.name} (${item.id})] 등록 완료!`);
+    setEditingStaff({ id: '', name: '', dept: '' });
+    alert(`신규 직원 [${item.name} (${item.id})] 명단 추가 완료!\n로그인 비밀번호는 서버 환경변수(STAFF_ACCOUNTS)에 등록해야 적용됩니다.`);
   };
 
   // 직원 삭제
@@ -427,7 +453,10 @@ export default function AdminPage() {
               <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>비밀번호</label>
               <input type="password" value={loginForm.pw} onChange={(e) => setLoginForm({ ...loginForm, pw: e.target.value })} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }} placeholder="비밀번호를 입력하세요" required />
             </div>
-            <button type="submit" style={{ padding: '13px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', marginTop: '6px' }}>로그인</button>
+            {loginError && (
+              <div style={{ fontSize: '12px', lineHeight: '1.5', color: '#b91c1c', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '9px 11px' }}>{loginError}</div>
+            )}
+            <button type="submit" disabled={loginBusy} style={{ padding: '13px', backgroundColor: loginBusy ? '#94a3b8' : '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', cursor: loginBusy ? 'default' : 'pointer', marginTop: '6px' }}>{loginBusy ? '확인 중…' : '로그인'}</button>
           </form>
         </div>
       </div>
@@ -674,7 +703,7 @@ export default function AdminPage() {
                 <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 4px 0' }}>👥 직원 계정 관리 & 1:1 상담 모니터링</h2>
                 <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>총괄 관리자 전용: 새 직원 등록, 각 직원의 실시간 대화 감청 및 고객 재배정이 가능합니다.</p>
               </div>
-              <button onClick={() => { setEditingStaff({ id: `worker${staffList.length + 1}`, pw: '1234', name: '', dept: '' }); setShowStaffModal(true); }} className="btn btn-pri">
+              <button onClick={() => { setEditingStaff({ id: `worker${staffList.length + 1}`, name: '', dept: '' }); setShowStaffModal(true); }} className="btn btn-pri">
                 ➕ 신규 직원 계정 등록
               </button>
             </div>
@@ -936,9 +965,9 @@ export default function AdminPage() {
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 12px 0' }}>👥 신규 상담 직원 등록</h3>
             <form onSubmit={handleSaveNewStaff} style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>아이디 (ID)</label><input type="text" placeholder="예: worker4" value={editingStaff.id} onChange={e => setEditingStaff({ ...editingStaff, id: e.target.value })} className="inp" required /></div>
-              <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>비밀번호</label><input type="password" placeholder="비밀번호 설정" value={editingStaff.pw} onChange={e => setEditingStaff({ ...editingStaff, pw: e.target.value })} className="inp" required /></div>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>직원 성함 / 직급</label><input type="text" placeholder="예: 최지원 대리" value={editingStaff.name} onChange={e => setEditingStaff({ ...editingStaff, name: e.target.value })} className="inp" required /></div>
               <div><label style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>부서 / 전담 언어</label><input type="text" placeholder="예: 상담 4팀 (베트남 전담)" value={editingStaff.dept} onChange={e => setEditingStaff({ ...editingStaff, dept: e.target.value })} className="inp" /></div>
+              <div style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.5' }}>로그인 비밀번호는 여기서 저장하지 않습니다. 서버 환경변수 <code>STAFF_ACCOUNTS</code>에 계정을 추가해야 로그인할 수 있습니다.</div>
               <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                 <button type="button" onClick={() => setShowStaffModal(false)} className="btn btn-sec" style={{ flex: 1 }}>취소</button>
                 <button type="submit" className="btn btn-pri" style={{ flex: 1 }}>등록 완료</button>
